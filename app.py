@@ -505,12 +505,28 @@ def _build_schedule_html(data: dict, cls: str, filtered_weeks: list) -> str:
 def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
     """Render the schedule as a high-resolution PNG image using Playwright (headless Chromium).
 
+    Auto-installs Chromium on first run (needed for Streamlit Cloud).
     Falls back to returning the raw HTML bytes if Playwright is not available.
     """
     full_html = _build_schedule_html(data, cls, filtered_weeks)
 
     try:
         from playwright.sync_api import sync_playwright
+        import subprocess
+
+        # Auto-install Chromium if not yet installed (first run on Streamlit Cloud)
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                browser.close()
+        except Exception:
+            # Chromium not installed yet — install it now
+            subprocess.run(
+                ["playwright", "install", "chromium"],
+                check=True,
+                capture_output=True,
+                timeout=120,
+            )
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -1128,15 +1144,20 @@ def render_scheduler(data: dict, cls: str, auth_info: dict):
     st.markdown("---")
     st.markdown("### שיתוף וייצוא")
     
-    # Generate the PNG image (cached so it only runs once per change)
-    @st.cache_data(show_spinner="📸 יוצר תמונה...")
-    def _generate_png(_weeks_hash, _cls, _year):
-        return schedule_to_png(data, _cls, filtered_weeks)
-    
-    # Create a simple hash to detect changes
-    weeks_hash = str(len(filtered_weeks)) + str(cls) + str(data.get("year", ""))
-    png_image = _generate_png(weeks_hash, cls, data.get("year", ""))
-    is_png = isinstance(png_image, bytes) and png_image[:4] == b'\x89PNG'
+    # Pre-generate the PNG image for the download button
+    if "wa_png_cache_key" not in st.session_state:
+        st.session_state["wa_png_cache_key"] = None
+        st.session_state["wa_png_bytes"] = None
+
+    cache_key = f"{cls}_{data.get('year','')}_{len(filtered_weeks)}"
+    if st.session_state["wa_png_cache_key"] != cache_key:
+        with st.spinner("📸 יוצר תמונה..."):
+            png_result = schedule_to_png(data, cls, filtered_weeks)
+        st.session_state["wa_png_cache_key"] = cache_key
+        st.session_state["wa_png_bytes"] = png_result
+
+    png_image = st.session_state["wa_png_bytes"]
+    is_png = isinstance(png_image, bytes) and len(png_image) > 4 and png_image[:4] == b'\x89PNG'
     
     exp_col1, exp_col2, exp_col3 = st.columns(3)
 
@@ -1162,12 +1183,13 @@ def render_scheduler(data: dict, cls: str, auth_info: dict):
             )
         else:
             st.download_button(
-                "📄 הורד HTML",
-                data=png_image,
+                "📸 הורד תמונה (HTML)",
+                data=png_image if png_image else b"",
                 file_name=f"לוח_{cls}.html",
                 mime="text/html",
                 key="download_html_fallback",
                 use_container_width=True,
+                type="primary",
             )
 
     with exp_col3:
