@@ -454,17 +454,21 @@ def to_excel(data: dict, cls: str) -> bytes:
 # EXPORT: PNG / HTML
 # ===================================================================
 
-def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
+def _build_schedule_html(data: dict, cls: str, filtered_weeks: list) -> str:
+    """Build a self-contained HTML string of the schedule table for rendering."""
     pm = data.get("parashat_hashavua", {})
     html_parts = [
         '<html><head><meta charset="utf-8"><style>'
         '@import url("https://fonts.googleapis.com/css2?family=Heebo:wght@400;700&display=swap");'
-        'body{direction:rtl;font-family:"Heebo",sans-serif;}'
+        'body{direction:rtl;font-family:"Heebo",sans-serif;margin:16px;background:#fff;}'
+        'h3{text-align:center;color:#1A237E;margin:8px 0 12px;}'
         'table{border-collapse:collapse;width:100%;direction:rtl;}'
-        'th{background:#1A237E;color:#fff;font-weight:700;padding:8px 6px;font-size:12px;border:1px solid #B0BEC5;}'
-        'td{padding:4px 4px;font-size:11px;border:1px solid #DEE2E6;text-align:center;vertical-align:top;min-width:100px;}'
+        'th{background:#1A237E;color:#fff;font-weight:700;padding:10px 8px;font-size:13px;border:1px solid #B0BEC5;}'
+        'td{padding:6px 5px;font-size:12px;border:1px solid #DEE2E6;text-align:center;vertical-align:top;min-width:110px;}'
+        '.date-label{color:#90A4AE;font-size:0.8em;}'
+        '.parasha{color:#F57F17;font-weight:700;}'
         '</style></head><body>'
-        f'<h3 style="text-align:center;color:#1A237E;">לוח שנה {data.get("year","")} - {cls}</h3>'
+        f'<h3>לוח שנה {data.get("year","")} - {cls}</h3>'
         '<table><thead><tr>'
     ]
     for dn in DAY_NAMES:
@@ -482,7 +486,7 @@ def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
                 pr = ["bagrut", "magen", "trip", "vacation", "holiday"]
                 dm = next((x for x in pr if any(e["type"] == x for e in evs)), "general")
                 bg_color = STYLES[dm]["bg"]
-            cell_texts = [f'<small style="color:#90A4AE;">{day_date}</small>']
+            cell_texts = [f'<small class="date-label">{day_date}</small>']
             for ev in evs:
                 s = STYLES.get(ev["type"], STYLES["general"])
                 cell_texts.append(
@@ -490,18 +494,39 @@ def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
                     f'{ev["text"]}</span>'
                 )
             if dk == "shabbat" and parasha:
-                cell_texts.append(f'<span style="color:#F57F17;font-weight:700;">{parasha}</span>')
+                cell_texts.append(f'<span class="parasha">{parasha}</span>')
             html_parts.append(f'<td style="background:{bg_color};">{"<br>".join(cell_texts)}</td>')
         html_parts.append('</tr>')
 
     html_parts.append('</tbody></table></body></html>')
-    full_html = "".join(html_parts)
+    return "".join(html_parts)
+
+
+def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
+    """Render the schedule as a high-resolution PNG image using Playwright (headless Chromium).
+
+    Falls back to returning the raw HTML bytes if Playwright is not available.
+    """
+    full_html = _build_schedule_html(data, cls, filtered_weeks)
 
     try:
-        import imgkit
-        png_bytes = imgkit.from_string(full_html, False, options={"encoding": "UTF-8", "width": 1200})
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(
+                viewport={"width": 1200, "height": 800},
+                device_scale_factor=2,  # 2x resolution for sharp text
+            )
+            page.set_content(full_html, wait_until="networkidle")
+            # Wait for Google Fonts to load
+            page.wait_for_timeout(1500)
+            # Screenshot the full page content
+            png_bytes = page.screenshot(full_page=True, type="png")
+            browser.close()
         return png_bytes
     except Exception:
+        # Fallback: return HTML for manual download
         return full_html.encode("utf-8")
 
 
@@ -1103,7 +1128,17 @@ def render_scheduler(data: dict, cls: str, auth_info: dict):
     st.markdown("---")
     st.markdown("### שיתוף וייצוא")
     
-    exp_col1, exp_col2 = st.columns(2)
+    # Generate the PNG image (cached so it only runs once per change)
+    @st.cache_data(show_spinner="📸 יוצר תמונה...")
+    def _generate_png(_weeks_hash, _cls, _year):
+        return schedule_to_png(data, _cls, filtered_weeks)
+    
+    # Create a simple hash to detect changes
+    weeks_hash = str(len(filtered_weeks)) + str(cls) + str(data.get("year", ""))
+    png_image = _generate_png(weeks_hash, cls, data.get("year", ""))
+    is_png = isinstance(png_image, bytes) and png_image[:4] == b'\x89PNG'
+    
+    exp_col1, exp_col2, exp_col3 = st.columns(3)
 
     with exp_col1:
         st.download_button(
@@ -1115,27 +1150,28 @@ def render_scheduler(data: dict, cls: str, auth_info: dict):
         )
 
     with exp_col2:
-        if st.button("📄 הורד HTML (לצילום מסך)", key="export_html_btn", use_container_width=True):
-            # Generate HTML for screenshot
-            png_data = schedule_to_png(data, cls, filtered_weeks)
+        if is_png:
             st.download_button(
-                "⬇️ לחץ כאן להוריד", 
-                data=png_data, 
+                "📸 הורד תמונה לווצאפ",
+                data=png_image,
+                file_name=f"לוח_{cls}.png",
+                mime="image/png",
+                key="download_png_direct",
+                use_container_width=True,
+                type="primary",
+            )
+        else:
+            st.download_button(
+                "📄 הורד HTML",
+                data=png_image,
                 file_name=f"לוח_{cls}.html",
-                mime="text/html", 
-                key="download_html",
+                mime="text/html",
+                key="download_html_fallback",
                 use_container_width=True,
             )
-            st.info("💡 פתח את הקובץ בדפדפן, צלם מסך (Win+Shift+S), ושלח בווצאפ!")
 
-    # WhatsApp sharing section
-    st.markdown("---")
-    st.markdown("### 📱 שיתוף בווצאפ")
-    
-    wa_col1, wa_col2 = st.columns(2)
-    
-    with wa_col1:
-        # Text version
+    with exp_col3:
+        # WhatsApp text share
         wa_text = build_whatsapp_text(data, cls, filtered_weeks)
         wa_url = f"https://wa.me/?text={urllib.parse.quote(wa_text[:4000])}"
         st.markdown(
@@ -1146,25 +1182,23 @@ def render_scheduler(data: dict, cls: str, auth_info: dict):
             f'📝 שלח טקסט בווצאפ</a>',
             unsafe_allow_html=True,
         )
-        st.caption("שולח את האירועים כטקסט")
-    
-    with wa_col2:
-        # Public link for parents
-        if not auth_info.get("is_public") and school_id:
-            base = st.session_state.get("base_url_input", _get_base_url())
-            link = f"{base}?school_id={urllib.parse.quote(school_id)}&class={urllib.parse.quote(cls)}&mode=view"
-            
-            # Copy link button
-            st.markdown(
-                f'<div style="background:#F0F4FF;border:2px solid #1A237E;border-radius:8px;padding:8px;margin-bottom:4px;">'
-                f'<div style="font-size:0.75em;color:#666;margin-bottom:4px;">📎 קישור ישיר להורים:</div>'
-                f'<input type="text" value="{link}" readonly '
-                f'style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:0.8em;direction:ltr;text-align:left;" '
-                f'onclick="this.select();document.execCommand(\'copy\');alert(\'הקישור הועתק!\');">'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-            st.caption("לחץ על הקישור להעתקה ושלח בווצאפ")
+
+    # Public link for parents
+    if not auth_info.get("is_public") and school_id:
+        st.markdown("---")
+        st.markdown("### 📎 קישור ישיר להורים")
+        base = st.session_state.get("base_url_input", _get_base_url())
+        link = f"{base}?school_id={urllib.parse.quote(school_id)}&class={urllib.parse.quote(cls)}&mode=view"
+        
+        st.markdown(
+            f'<div style="background:#F0F4FF;border:2px solid #1A237E;border-radius:8px;padding:10px;">'
+            f'<input type="text" value="{link}" readonly '
+            f'style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:0.85em;direction:ltr;text-align:left;" '
+            f'onclick="this.select();document.execCommand(\'copy\');alert(\'הקישור הועתק!\');">'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption("לחץ על הקישור להעתקה ושלח בווצאפ")
 
 
     # ==================================================================
