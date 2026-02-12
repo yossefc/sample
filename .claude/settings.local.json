@@ -15,7 +15,21 @@
       "Bash(powershell -Command \"Get-Process -Name python* -ErrorAction SilentlyContinue | Where-Object { $_CommandLine -like ''*streamlit*'' } | Stop-Process -Force -ErrorAction SilentlyContinue; Get-NetTCPConnection -LocalPort 8510 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_OwningProcess -Force -ErrorAction SilentlyContinue }; Get-NetTCPConnection -LocalPort 8503 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Output ''DONE''\")",
       "Bash(powershell -NoProfile -Command:*)",
       "WebFetch(domain:www.hebcal.com)",
-      "WebFetch(domain:mosdot.education.gov.il)"
+      "WebFetch(domain:mosdot.education.gov.il)",
+      "Bash(pip show:*)",
+      "WebFetch(domain:docs.streamlit.io)",
+      "Bash(if not exist \"C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\.streamlit\" mkdir \"C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\.streamlit\")",
+      "Bash(dir:*)",
+      "Bash(del fix3.py patch_app.py patch2.py users_config.yaml)",
+      "Bash(cmd /c \"del fix3.py patch_app.py patch2.py users_config.yaml\")",
+      "Bash(cmd /c \"dir /b *.py\")",
+      "Bash(cmd /c \"dir /b C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\*.py C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\*.yaml 2>nul\")",
+      "Bash(cmd /c \"del /Q C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\fix3.py C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\patch_app.py C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\patch2.py C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\users_config.yaml C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\payments_db.json\")",
+      "Bash(cmd /c \"cd /d C:\\\\Users\\\\USER\\\\Downloads\\\\sample && dir /b *.py\")",
+      "Bash(cmd /c \"cd /d C:\\\\Users\\\\USER\\\\Downloads\\\\sample && if exist fix3.py \\(echo EXISTS\\) else \\(echo GONE\\)\")",
+      "Bash(powershell -Command \"Get-ChildItem C:\\\\Users\\\\USER\\\\Downloads\\\\sample -Filter *.py | Select-Object -ExpandProperty Name\")",
+      "Bash(powershell -Command \"Remove-Item -Force ''C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\fix3.py'',''C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\patch_app.py'',''C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\patch2.py'',''C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\users_config.yaml'',''C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\payments_db.json''\")",
+      "Bash(powershell -Command:*)"
     ]
   }
 }

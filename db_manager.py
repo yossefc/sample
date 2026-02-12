@@ -49,12 +49,14 @@ def _get_db():
 
     if not firebase_admin._apps:
         cred = None
+        project_id = None
 
         # 1) Streamlit secrets
         try:
             import streamlit as st
             firebase_cfg = st.secrets.get("firebase", {})
             if firebase_cfg.get("project_id"):
+                project_id = firebase_cfg["project_id"]
                 cred = credentials.Certificate(dict(firebase_cfg))
         except Exception:
             pass
@@ -71,6 +73,13 @@ def _get_db():
             for path in candidates:
                 if path and Path(path).exists():
                     cred = credentials.Certificate(path)
+                    # Extract project_id from the key file
+                    try:
+                        with open(path, encoding="utf-8") as f:
+                            key_data = json.load(f)
+                            project_id = key_data.get("project_id", project_id)
+                    except Exception:
+                        pass
                     break
 
         # 3) Application Default Credentials (Cloud Run auto-provides these)
@@ -84,7 +93,15 @@ def _get_db():
                     "or configure [firebase] in .streamlit/secrets.toml"
                 )
 
-        firebase_admin.initialize_app(cred)
+        # Extract project_id from credential if not already set
+        if not project_id and hasattr(cred, 'project_id'):
+            project_id = cred.project_id
+
+        # Initialize with explicit project ID
+        options = {}
+        if project_id:
+            options['projectId'] = project_id
+        firebase_admin.initialize_app(cred, options)
 
     _db = firestore.client()
     return _db
