@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
+firestore-key.json
+firestore-key.json.json
+.claude/
+*.log
+.env
+venv/
+*.bat
+patch*.py
+fix*.py
+migrate_*.py
+resume_*.txt
+*.tmp

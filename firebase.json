@@ -1,0 +1,15 @@
+{
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "luach-mivchanim",
+          "region": "me-west1"
+        }
+      }
+    ]
+  }
+}
