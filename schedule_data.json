@@ -1,0 +1,1976 @@
+{
+  "classes": [
+    "יא 1",
+    "יא 2",
+    "יא 3"
+  ],
+  "year": "תשפ\"ו",
+  "weeks": [
+    {
+      "date_range": "31.8-6.9",
+      "start_date": "2025-08-31",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "7-13.9",
+      "start_date": "2025-09-07",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "14-20.9",
+      "start_date": "2025-09-14",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "21-27.9",
+      "start_date": "2025-09-21",
+      "days": {
+        "sunday": [],
+        "monday": [
+          {
+            "text": "ערב ראש השנה",
+            "type": "holiday",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "ראש השנה א'",
+            "type": "holiday",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "ראש השנה ב'",
+            "type": "holiday",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "צום גדליה",
+            "type": "holiday",
+            "class": "all"
+          }
+        ],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "28.9-4.10",
+      "start_date": "2025-09-28",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [
+          {
+            "text": "ערב יום כיפור",
+            "type": "holiday",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "יום כיפור",
+            "type": "holiday",
+            "class": "all"
+          }
+        ],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "5-11.10",
+      "start_date": "2025-10-05",
+      "days": {
+        "sunday": [],
+        "monday": [
+          {
+            "text": "חופשת סוכות",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "סוכות",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת סוכות",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חול המועד סוכות",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת סוכות",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חול המועד סוכות",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת סוכות",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חול המועד סוכות",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת סוכות",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חול המועד סוכות",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת סוכות",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "12-18.10",
+      "start_date": "2025-10-12",
+      "days": {
+        "sunday": [
+          {
+            "text": "חול המועד סוכות",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת סוכות",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חול המועד סוכות",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת סוכות",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "שמחת תורה",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת סוכות",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "19-25.10",
+      "start_date": "2025-10-19",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "26.10-1.11",
+      "start_date": "2025-10-26",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "2-8.11",
+      "start_date": "2025-11-02",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "9-15.11",
+      "start_date": "2025-11-09",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "16-22.11",
+      "start_date": "2025-11-16",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "23-29.11",
+      "start_date": "2025-11-23",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "30.11-6.12",
+      "start_date": "2025-11-30",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "7-13.12",
+      "start_date": "2025-12-07",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "14-20.12",
+      "start_date": "2025-12-14",
+      "days": {
+        "sunday": [
+          {
+            "text": "חנוכה - נר ראשון",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת חנוכה",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חנוכה",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת חנוכה",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חנוכה",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת חנוכה",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חנוכה",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת חנוכה",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חנוכה",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת חנוכה",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חנוכה",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת חנוכה",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חנוכה",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת חנוכה",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "21-27.12",
+      "start_date": "2025-12-21",
+      "days": {
+        "sunday": [
+          {
+            "text": "חנוכה - נר שמיני",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת חנוכה",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת חנוכה",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "28.12-3.1",
+      "start_date": "2025-12-28",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "4-10.1",
+      "start_date": "2026-01-04",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "11-17.1",
+      "start_date": "2026-01-11",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "18-24.1",
+      "start_date": "2026-01-18",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "25-31.1",
+      "start_date": "2026-01-25",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "1-7.2",
+      "start_date": "2026-02-01",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת סמסטר",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "ט\"ו בשבט",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת סמסטר",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת סמסטר",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת סמסטר",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת סמסטר",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת סמסטר",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "8-14.2",
+      "start_date": "2026-02-08",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "15-21.2",
+      "start_date": "2026-02-15",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "22-28.2",
+      "start_date": "2026-02-22",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "1-7.3",
+      "start_date": "2026-03-01",
+      "days": {
+        "sunday": [],
+        "monday": [
+          {
+            "text": "תענית אסתר",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פורים",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "פורים",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פורים",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "שושן פורים",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פורים",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "8-14.3",
+      "start_date": "2026-03-08",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "15-21.3",
+      "start_date": "2026-03-15",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "22-28.3",
+      "start_date": "2026-03-22",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "29.3-4.4",
+      "start_date": "2026-03-29",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "ערב פסח",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "פסח",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חול המועד פסח",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חול המועד פסח",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "5-11.4",
+      "start_date": "2026-04-05",
+      "days": {
+        "sunday": [
+          {
+            "text": "חול המועד פסח",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חול המועד פסח",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חול המועד פסח",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "שביעי של פסח",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת פסח",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "12-18.4",
+      "start_date": "2026-04-12",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [
+          {
+            "text": "יום השואה",
+            "type": "holiday",
+            "class": "all"
+          }
+        ],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "19-25.4",
+      "start_date": "2026-04-19",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [
+          {
+            "text": "יום הזיכרון",
+            "type": "holiday",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "יום העצמאות",
+            "type": "holiday",
+            "class": "all"
+          }
+        ],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "26.4-2.5",
+      "start_date": "2026-04-26",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "3-9.5",
+      "start_date": "2026-05-03",
+      "days": {
+        "sunday": [],
+        "monday": [
+          {
+            "text": "בגרות ספרות (21381)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "21381"
+          },
+          {
+            "text": "בגרות ספרות 3 יח\"ל (21382)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "21382"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "ל\"ג בעומר",
+            "type": "holiday",
+            "class": "all"
+          }
+        ],
+        "wednesday": [],
+        "thursday": [
+          {
+            "text": "בגרות תנ\"ך 5 יח\"ל (11281)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "11281"
+          }
+        ],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "10-16.5",
+      "start_date": "2026-05-10",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [
+          {
+            "text": "בגרות מתמטיקה 3 יח\"ל (35183)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "35183"
+          },
+          {
+            "text": "בגרות מתמטיקה - תכנית חדשה (35471)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "35471"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "בגרות מתמטיקה 4 יח\"ל (35382)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "35382"
+          },
+          {
+            "text": "בגרות מתמטיקה 5 יח\"ל (35581)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "35581"
+          },
+          {
+            "text": "בגרות מתמטיקה - תכנית חדשה (35172)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "35172"
+          }
+        ],
+        "thursday": [],
+        "friday": [
+          {
+            "text": "יום ירושלים",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "בגרות אזרחות (31281)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "31281"
+          }
+        ],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "17-23.5",
+      "start_date": "2026-05-17",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [
+          {
+            "text": "בגרות אנגלית שאלון E (16481)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "16481"
+          },
+          {
+            "text": "בגרות אנגלית שאלון ד - D (16484)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "16484"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "בגרות פיזיקה 3 יח\"ל (43182)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "43182"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "ערב שבועות",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת שבועות",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "שבועות",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת שבועות",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "בגרות ביולוגיה 3 יח\"ל (43382)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "43382"
+          }
+        ],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "24-30.5",
+      "start_date": "2026-05-24",
+      "days": {
+        "sunday": [],
+        "monday": [
+          {
+            "text": "בגרות לשון - הבנת הלשון (12181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "12181"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "בגרות אנגלית שאלון C (16483)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "16483"
+          }
+        ],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "31.5-6.6",
+      "start_date": "2026-05-31",
+      "days": {
+        "sunday": [],
+        "monday": [],
+        "tuesday": [
+          {
+            "text": "בגרות פסיכולוגיה (36181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "36181"
+          }
+        ],
+        "wednesday": [],
+        "thursday": [
+          {
+            "text": "בגרות תלמוד - גמרא (23181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "23181"
+          },
+          {
+            "text": "בגרות מחשבת ישראל (24181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "24181"
+          },
+          {
+            "text": "בגרות מדעי המחשב ב' (899271)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "899271"
+          }
+        ],
+        "friday": [
+          {
+            "text": "בגרות צרפתית (55181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "55181"
+          }
+        ],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "7-13.6",
+      "start_date": "2026-06-07",
+      "days": {
+        "sunday": [],
+        "monday": [
+          {
+            "text": "בגרות סוציולוגיה (32181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "32181"
+          },
+          {
+            "text": "בגרות ביולוגיה 5 יח\"ל (43381)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "43381"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "בגרות תנ\"ך 3 יח\"ל (11182)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "11182"
+          },
+          {
+            "text": "בגרות תנ\"ך ממלכתי (11381)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "11381"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "בגרות פיזיקה 5 יח\"ל (43181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "43181"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "בגרות כלכלה - מיקרו (34181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "34181"
+          }
+        ],
+        "friday": [
+          {
+            "text": "בגרות כימיה 5 יח\"ל (43281)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "43281"
+          }
+        ],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "14-20.6",
+      "start_date": "2026-06-14",
+      "days": {
+        "sunday": [],
+        "monday": [
+          {
+            "text": "בגרות היסטוריה - חלק א' (22181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "22181"
+          },
+          {
+            "text": "בגרות כלכלה - מקרו (34182)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "34182"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "בגרות היסטוריה - חלק ב' (22281)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "22281"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "בגרות אלקטרוניקה (44181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "44181"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "בגרות מכטרוניקה (44281)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "44281"
+          },
+          {
+            "text": "בגרות מערכות מידע (46181)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "46181"
+          }
+        ],
+        "friday": [
+          {
+            "text": "בגרות ביוטכנולוגיה (44381)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "44381"
+          }
+        ],
+        "shabbat": []
+      }
+    },
+    {
+      "date_range": "21-27.6",
+      "start_date": "2026-06-21",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          },
+          {
+            "text": "בגרות לשון - הבעת הלשון (12281)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "12281"
+          },
+          {
+            "text": "בגרות ערבית (65281)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "65281"
+          },
+          {
+            "text": "בגרות מדעי המחשב - פרויקט (899371)",
+            "type": "bagrut",
+            "class": "יא 1",
+            "exam_code": "899371"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "28.6-4.7",
+      "start_date": "2026-06-28",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "צום י\"ז בתמוז",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "5-11.7",
+      "start_date": "2026-07-05",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "12-18.7",
+      "start_date": "2026-07-12",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "19-25.7",
+      "start_date": "2026-07-19",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "צום ט' באב",
+            "type": "holiday",
+            "class": "all"
+          },
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "26.7-1.8",
+      "start_date": "2026-07-26",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "2-8.8",
+      "start_date": "2026-08-02",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "9-15.8",
+      "start_date": "2026-08-09",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "16-22.8",
+      "start_date": "2026-08-16",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "23-29.8",
+      "start_date": "2026-08-23",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "wednesday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "thursday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "friday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "shabbat": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ]
+      }
+    },
+    {
+      "date_range": "30.8-5.9",
+      "start_date": "2026-08-30",
+      "days": {
+        "sunday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "monday": [
+          {
+            "text": "חופשת קיץ",
+            "type": "vacation",
+            "class": "all"
+          }
+        ],
+        "tuesday": [],
+        "wednesday": [],
+        "thursday": [],
+        "friday": [],
+        "shabbat": []
+      }
+    }
+  ],
+  "parashat_hashavua": {
+    "2024-12-29": "פרשת ויגש",
+    "2025-01-05": "פרשת ויחי",
+    "2025-01-12": "פרשת שמות",
+    "2025-01-19": "פרשת וארא",
+    "2025-01-26": "פרשת בא",
+    "2025-02-02": "פרשת בשלח",
+    "2025-02-09": "פרשת יתרו",
+    "2025-02-16": "פרשת משפטים",
+    "2025-02-23": "פרשת תרומה",
+    "2025-03-02": "פרשת תצוה",
+    "2025-03-09": "פרשת כי תשא",
+    "2025-03-16": "פרשת ויקהל",
+    "2025-03-23": "פרשת פקודי",
+    "2025-03-30": "פרשת ויקרא",
+    "2025-04-06": "פרשת צו",
+    "2025-04-20": "פרשת שמיני",
+    "2025-04-27": "פרשת תזריע-מצרע",
+    "2025-05-04": "פרשת אחרי מות-קדשים",
+    "2025-05-11": "פרשת אמור",
+    "2025-05-18": "פרשת בהר-בחקתי",
+    "2025-05-25": "פרשת במדבר",
+    "2025-06-01": "פרשת נשא",
+    "2025-06-08": "פרשת בהעלתך",
+    "2025-06-15": "פרשת שלח־לך",
+    "2025-06-22": "פרשת קורח",
+    "2025-06-29": "פרשת חוקת",
+    "2025-07-06": "פרשת בלק",
+    "2025-07-13": "פרשת פינחס",
+    "2025-07-20": "פרשת מטות-מסעי",
+    "2025-07-27": "פרשת דברים",
+    "2025-08-03": "פרשת ואתחנן",
+    "2025-08-10": "פרשת עקב",
+    "2025-08-17": "פרשת ראה",
+    "2025-08-24": "פרשת שופטים",
+    "2025-08-31": "פרשת כי־תצא",
+    "2025-09-07": "פרשת כי־תבוא",
+    "2025-09-14": "פרשת נצבים",
+    "2025-09-21": "פרשת וילך",
+    "2025-09-28": "פרשת האזינו",
+    "2025-10-12": "פרשת בראשית",
+    "2025-10-19": "פרשת נח",
+    "2025-10-26": "פרשת לך־לך",
+    "2025-11-02": "פרשת וירא",
+    "2025-11-09": "פרשת חיי שרה",
+    "2025-11-16": "פרשת תולדות",
+    "2025-11-23": "פרשת ויצא",
+    "2025-11-30": "פרשת וישלח",
+    "2025-12-07": "פרשת וישב",
+    "2025-12-14": "פרשת מקץ",
+    "2025-12-21": "פרשת ויגש",
+    "2025-12-28": "פרשת ויחי",
+    "2026-01-04": "פרשת שמות",
+    "2026-01-11": "פרשת וארא",
+    "2026-01-18": "פרשת בא",
+    "2026-01-25": "פרשת בשלח",
+    "2026-02-01": "פרשת יתרו",
+    "2026-02-08": "פרשת משפטים",
+    "2026-02-15": "פרשת תרומה",
+    "2026-02-22": "פרשת תצוה",
+    "2026-03-01": "פרשת כי תשא",
+    "2026-03-08": "פרשת ויקהל-פקודי",
+    "2026-03-15": "פרשת ויקרא",
+    "2026-03-22": "פרשת צו",
+    "2026-04-05": "פרשת שמיני",
+    "2026-04-12": "פרשת תזריע-מצרע",
+    "2026-04-19": "פרשת אחרי מות-קדשים",
+    "2026-04-26": "פרשת אמור",
+    "2026-05-03": "פרשת בהר-בחקתי",
+    "2026-05-10": "פרשת במדבר",
+    "2026-05-17": "פרשת נשא",
+    "2026-05-24": "פרשת בהעלתך",
+    "2026-05-31": "פרשת שלח־לך",
+    "2026-06-07": "פרשת קורח",
+    "2026-06-14": "פרשת חוקת",
+    "2026-06-21": "פרשת בלק",
+    "2026-06-28": "פרשת פינחס",
+    "2026-07-05": "פרשת מטות-מסעי",
+    "2026-07-12": "פרשת דברים",
+    "2026-07-19": "פרשת ואתחנן",
+    "2026-07-26": "פרשת עקב",
+    "2026-08-02": "פרשת ראה",
+    "2026-08-09": "פרשת שופטים",
+    "2026-08-16": "פרשת כי־תצא",
+    "2026-08-23": "פרשת כי־תבוא",
+    "2026-08-30": "פרשת נצבים-וילך",
+    "2026-09-13": "פרשת האזינו",
+    "2026-10-04": "פרשת בראשית",
+    "2026-10-11": "פרשת נח",
+    "2026-10-18": "פרשת לך־לך",
+    "2026-10-25": "פרשת וירא",
+    "2026-11-01": "פרשת חיי שרה",
+    "2026-11-08": "פרשת תולדות",
+    "2026-11-15": "פרשת ויצא",
+    "2026-11-22": "פרשת וישלח",
+    "2026-11-29": "פרשת וישב",
+    "2026-12-06": "פרשת מקץ",
+    "2026-12-13": "פרשת ויגש",
+    "2026-12-20": "פרשת ויחי"
+  }
+}

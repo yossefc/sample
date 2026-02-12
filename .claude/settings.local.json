@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "WebSearch",
+      "WebFetch(domain:www.study.co.il)",
+      "WebFetch(domain:pop.education.gov.il)",
+      "WebFetch(domain:meyda.education.gov.il)",
+      "WebFetch(domain:news.walla.co.il)",
+      "WebFetch(domain:www.ticketsi.co.il)",
+      "WebFetch(domain:exams.education.gov.il)",
+      "WebFetch(domain:openbook.co.il)",
+      "WebFetch(domain:www.high-q.co.il)",
+      "Bash(powershell -Command \"Get-Process -Name python* -ErrorAction SilentlyContinue | Where-Object { $_CommandLine -like ''*streamlit*'' } | Stop-Process -Force -ErrorAction SilentlyContinue; Get-NetTCPConnection -LocalPort 8510 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_OwningProcess -Force -ErrorAction SilentlyContinue }; Get-NetTCPConnection -LocalPort 8503 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Output ''DONE''\")",
+      "Bash(powershell -NoProfile -Command:*)",
+      "WebFetch(domain:www.hebcal.com)",
+      "WebFetch(domain:mosdot.education.gov.il)"
+    ]
+  }
+}

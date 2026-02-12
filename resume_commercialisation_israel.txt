@@ -1,0 +1,33 @@
+﻿Résumé à copier dans ChatGPT
+
+Je développe un programme éducatif et je veux le commercialiser en Israël auprès des écoles.
+
+Contexte
+- Marché cible: écoles en Israël.
+- Canal principal visé: GEFEN (Ministère de l'Éducation).
+- Je veux commencer simple, avec une offre claire et facile à vendre.
+
+Positionnement actuel (prix de départ)
+- Pilote école: 2 000 à 4 000 NIS
+- Pack annuel école: 8 000 à 15 000 NIS
+- Atelier par élève: 10 à 25 NIS
+
+Stratégie
+- Lancer 2-3 pilotes à prix accessible.
+- Mesurer les résultats (avant/après, satisfaction enseignants).
+- Récupérer des témoignages.
+- Augmenter ensuite les prix progressivement.
+
+Ce que je veux que ChatGPT m'aide à faire
+1) Construire une offre commerciale en 1 page (promesse, public, durée, résultats, prix).
+2) Créer un plan d'action sur 30 jours pour trouver les premières écoles clientes.
+3) Rédiger un script de vente (appel + email + WhatsApp) en français simple.
+4) Préparer une grille de prix claire: version début, version standard, version premium.
+5) Préparer une checklist administrative pour vendre correctement en Israël.
+
+Informations à me demander pour affiner
+- Type exact du programme (matière, niveau scolaire, durée).
+- Nombre d'élèves par école.
+- Ville/région cible.
+- Langue de livraison (français, hébreu, arabe, anglais).
+- Objectif de revenu mensuel.

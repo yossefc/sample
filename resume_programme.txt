@@ -1,0 +1,25 @@
+﻿Résumé du programme
+
+Ce programme est une application Streamlit de planning scolaire annuel (interface en hébreu, RTL).
+
+Fonctions principales
+- Gestion du calendrier scolaire par semaine et par classe.
+- Ajout / suppression d'événements (bac, test, sortie, vacances, fêtes, général).
+- Import des examens officiels depuis la base du Ministère de l'Éducation.
+- Recherche des examens par matière ou code.
+- Synchronisation des dates d'examens si le ministère publie une mise à jour.
+- Import des vacances et jours fériés depuis une base locale.
+- Génération automatique d'une nouvelle année scolaire (septembre à août).
+- Ajout automatique de la paracha hebdomadaire.
+- Export du planning en fichier Excel formaté.
+
+Fichiers utilisés
+- app.py
+- schedule_data.json
+- ministry_exams_database.json
+- school_holidays.json
+
+État actuel des données
+- 53 semaines dans le planning.
+- 379 examens dans la base ministère.
+- Dernière mise à jour de la base examens: 2026-02-11.
