@@ -1159,7 +1159,7 @@ def render_scheduler(data: dict, cls: str, auth_info: dict):
     png_image = st.session_state["wa_png_bytes"]
     is_png = isinstance(png_image, bytes) and len(png_image) > 4 and png_image[:4] == b'\x89PNG'
     
-    exp_col1, exp_col2, exp_col3 = st.columns(3)
+    exp_col1, exp_col2 = st.columns(2)
 
     with exp_col1:
         st.download_button(
@@ -1192,52 +1192,7 @@ def render_scheduler(data: dict, cls: str, auth_info: dict):
                 type="primary",
             )
 
-    with exp_col3:
-        # WhatsApp text share
-        wa_text = build_whatsapp_text(data, cls, filtered_weeks)
-        wa_url = f"https://wa.me/?text={urllib.parse.quote(wa_text[:4000])}"
-        st.markdown(
-            f'<a href="{wa_url}" target="_blank" style="'
-            f'display:inline-block;width:100%;text-align:center;'
-            f'background:#25D366;color:white;padding:12px;border-radius:8px;'
-            f'text-decoration:none;font-weight:700;font-size:0.9em;">'
-            f'📝 שלח טקסט בווצאפ</a>',
-            unsafe_allow_html=True,
-        )
 
-    # Public link for parents
-    if not auth_info.get("is_public") and school_id:
-        st.markdown("---")
-        st.markdown("### 📎 קישור ישיר להורים")
-        base = st.session_state.get("base_url_input", _get_base_url())
-        link = f"{base}?school_id={urllib.parse.quote(school_id)}&class={urllib.parse.quote(cls)}&mode=view"
-        
-        st.markdown(
-            f'<div style="background:#F0F4FF;border:2px solid #1A237E;border-radius:8px;padding:10px;">'
-            f'<input type="text" value="{link}" readonly '
-            f'style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:0.85em;direction:ltr;text-align:left;" '
-            f'onclick="this.select();document.execCommand(\'copy\');alert(\'הקישור הועתק!\');">'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        st.caption("לחץ על הקישור להעתקה ושלח בווצאפ")
-
-
-    # ==================================================================
-    # PAYMENTS VIEW (visible on public link - no login needed)
-    # ==================================================================
-    if school_id:
-        relevant = get_payments_for_class(school_id, cls)
-        if relevant:
-            st.markdown("---")
-            st.markdown("### תשלומים נדרשים")
-            for ch in relevant:
-                st.markdown(
-                    f'<div class="payment-card">'
-                    f'<b>{ch["description"]}</b> - ₪{ch["amount"]}<br>'
-                    f'יעד תשלום: {ch.get("due_date", "")}</div>',
-                    unsafe_allow_html=True,
-                )
 
 
 # ===================================================================
