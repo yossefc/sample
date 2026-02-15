@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Heebo', sans-serif;
+    direction: rtl;
+    background: transparent;
+    padding: 0;
+  }
+
+  .auth-container {
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  .auth-header { text-align: center; margin-bottom: 24px; }
+  .auth-header h1 {
+    color: #1A237E; font-weight: 900; font-size: 2rem;
+    margin: 0 0 4px; line-height: 1.2;
+  }
+  .auth-header p { color: #7986CB; font-size: 1rem; font-weight: 400; }
+
+  .tab-bar {
+    display: flex; border-bottom: 2px solid #E0E0E0; margin-bottom: 20px;
+  }
+  .tab-btn {
+    flex: 1; padding: 10px; text-align: center; cursor: pointer;
+    font-family: 'Heebo', sans-serif; font-weight: 600; font-size: 0.95rem;
+    color: #9E9E9E; border: none; background: transparent;
+    border-bottom: 3px solid transparent; transition: all 0.2s;
+  }
+  .tab-btn.active { color: #1A237E; border-bottom-color: #1A237E; }
+  .tab-btn:hover { color: #1A237E; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label {
+    display: block; font-weight: 500; font-size: 0.88rem;
+    color: #424242; margin-bottom: 6px;
+  }
+  .form-group input {
+    width: 100%; padding: 10px 14px;
+    border: 1.5px solid #E0E0E0; border-radius: 8px;
+    font-family: 'Heebo', sans-serif; font-size: 0.95rem;
+    direction: ltr; text-align: right; transition: border-color 0.2s;
+  }
+  .form-group input:focus { outline: none; border-color: #1A237E; }
+
+  .btn-primary {
+    width: 100%; padding: 12px; background: #1A237E; color: #fff;
+    border: none; border-radius: 8px; font-family: 'Heebo', sans-serif;
+    font-weight: 700; font-size: 1rem; cursor: pointer; transition: background 0.2s;
+  }
+  .btn-primary:hover { background: #283593; }
+  .btn-primary:disabled { background: #9E9E9E; cursor: not-allowed; }
+
+  .btn-link {
+    background: none; border: none; color: #1A237E; cursor: pointer;
+    font-family: 'Heebo', sans-serif; font-size: 0.88rem; font-weight: 500;
+    padding: 8px 0; text-decoration: underline;
+  }
+
+  .msg-error {
+    background: #FFEBEE; color: #C62828; padding: 10px 14px;
+    border-radius: 8px; font-size: 0.88rem; margin-bottom: 12px; display: none;
+  }
+  .msg-success {
+    background: #E8F5E9; color: #2E7D32; padding: 10px 14px;
+    border-radius: 8px; font-size: 0.88rem; margin-bottom: 12px; display: none;
+  }
+
+  .spinner {
+    display: none; text-align: center; padding: 8px;
+    color: #1A237E; font-size: 0.88rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="auth-container">
+  <div class="auth-header">
+    <h1>לוח מבחנים</h1>
+    <p>התחבר כדי להמשיך</p>
+  </div>
+
+  <div id="msgError" class="msg-error"></div>
+  <div id="msgSuccess" class="msg-success"></div>
+  <div id="spinner" class="spinner">מתחבר...</div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('login')">כניסה</button>
+    <button class="tab-btn" onclick="switchTab('register')">הרשמה</button>
+  </div>
+
+  <!-- Login Tab -->
+  <div id="tab-login" class="tab-content active">
+    <div class="form-group">
+      <label>אימייל</label>
+      <input type="email" id="loginEmail" placeholder="you@school.co.il" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>סיסמה</label>
+      <input type="password" id="loginPassword" placeholder="סיסמה" autocomplete="current-password">
+    </div>
+    <button class="btn-primary" id="loginBtn" onclick="doLogin()">התחבר</button>
+    <br>
+    <button class="btn-link" onclick="switchTab('reset')">שכחתי סיסמה</button>
+  </div>
+
+  <!-- Register Tab -->
+  <div id="tab-register" class="tab-content">
+    <div class="form-group">
+      <label>אימייל</label>
+      <input type="email" id="regEmail" placeholder="you@school.co.il" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>סיסמה</label>
+      <input type="password" id="regPassword" placeholder="לפחות 6 תווים" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label>אימות סיסמה</label>
+      <input type="password" id="regPassword2" placeholder="הזן שוב" autocomplete="new-password">
+    </div>
+    <button class="btn-primary" id="regBtn" onclick="doRegister()">הרשמה</button>
+  </div>
+
+  <!-- Reset Password Tab -->
+  <div id="tab-reset" class="tab-content">
+    <div class="form-group">
+      <label>אימייל לאיפוס סיסמה</label>
+      <input type="email" id="resetEmail" placeholder="you@school.co.il" autocomplete="email">
+    </div>
+    <button class="btn-primary" onclick="doReset()">שלח קישור איפוס</button>
+    <br>
+    <button class="btn-link" onclick="switchTab('login')">חזרה לכניסה</button>
+  </div>
+</div>
+
+<!-- Firebase JS SDK (compat mode, no build step needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+
+<script>
+// ── Streamlit custom component protocol (plain JS, no React) ──
+
+function sendMessageToStreamlitClient(type, data) {
+  var outData = Object.assign({isStreamlitMessage: true, type: type}, data);
+  window.parent.postMessage(outData, "*");
+}
+
+function init() {
+  sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1});
+}
+
+function setFrameHeight(height) {
+  sendMessageToStreamlitClient("streamlit:setFrameHeight", {height: height});
+}
+
+function setComponentValue(value) {
+  sendMessageToStreamlitClient("streamlit:setComponentValue", {value: value});
+}
+
+// ── Firebase initialisation ──
+
+var firebaseInitialized = false;
+var auth = null;
+var authStateListenerAttached = false;
+
+function ensureLocalPersistence() {
+  if (!auth) return Promise.resolve();
+  if (!auth.setPersistence || !firebase || !firebase.auth || !firebase.auth.Auth) return Promise.resolve();
+  return auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function() {});
+}
+
+window.addEventListener("message", function(event) {
+  if (event.data.type !== "streamlit:render") return;
+  var args = event.data.args;
+  var action = (args && args.action) ? String(args.action) : "auth";
+
+  if (!firebaseInitialized && args && args.api_key) {
+    firebase.initializeApp({
+      apiKey: args.api_key,
+      authDomain: args.auth_domain,
+      projectId: args.project_id
+    });
+    auth = firebase.auth();
+    auth.languageCode = "he";
+    ensureLocalPersistence();
+    firebaseInitialized = true;
+  }
+
+  if (!auth) {
+    setFrameHeight(args && args.height ? args.height : 520);
+    return;
+  }
+
+  if (action === "logout") {
+    auth.signOut()
+      .then(function() {
+        setComponentValue({ status: "logged_out", ts: Date.now() });
+      })
+      .catch(function(e) {
+        setComponentValue({ status: "logout_error", message: e.message || "" });
+      });
+    setFrameHeight(1);
+    return;
+  }
+
+  // Auto-detect returning users with existing browser session
+  if (!authStateListenerAttached) {
+    auth.onAuthStateChanged(function(user) {
+      if (user) {
+        sendTokenToStreamlit(user);
+      }
+    });
+    authStateListenerAttached = true;
+  }
+
+  setFrameHeight(args && args.height ? args.height : 520);
+});
+
+init();
+
+// ── UI helpers ──
+
+function switchTab(tab) {
+  document.querySelectorAll(".tab-content").forEach(function(el) {
+    el.classList.remove("active");
+  });
+  document.querySelectorAll(".tab-btn").forEach(function(el) {
+    el.classList.remove("active");
+  });
+
+  var tabEl = document.getElementById("tab-" + tab);
+  if (tabEl) tabEl.classList.add("active");
+
+  var btns = document.querySelectorAll(".tab-btn");
+  if (tab === "login") btns[0].classList.add("active");
+  else if (tab === "register") btns[1].classList.add("active");
+
+  hideMessages();
+}
+
+function showError(msg) {
+  var el = document.getElementById("msgError");
+  el.textContent = msg; el.style.display = "block";
+  document.getElementById("msgSuccess").style.display = "none";
+}
+
+function showSuccess(msg) {
+  var el = document.getElementById("msgSuccess");
+  el.textContent = msg; el.style.display = "block";
+  document.getElementById("msgError").style.display = "none";
+}
+
+function hideMessages() {
+  document.getElementById("msgError").style.display = "none";
+  document.getElementById("msgSuccess").style.display = "none";
+}
+
+function showSpinner() { document.getElementById("spinner").style.display = "block"; }
+function hideSpinner() { document.getElementById("spinner").style.display = "none"; }
+
+function translateFirebaseError(code) {
+  var map = {
+    "auth/invalid-email": "כתובת אימייל לא תקינה",
+    "auth/user-disabled": "חשבון זה הושבת",
+    "auth/user-not-found": "אימייל או סיסמה שגויים",
+    "auth/wrong-password": "אימייל או סיסמה שגויים",
+    "auth/invalid-credential": "אימייל או סיסמה שגויים",
+    "auth/email-already-in-use": "אימייל זה כבר רשום. נסה להתחבר.",
+    "auth/weak-password": "הסיסמה חלשה מדי. נסה סיסמה חזקה יותר.",
+    "auth/too-many-requests": "נחסמת זמנית עקב יותר מדי ניסיונות. נסה שוב מאוחר יותר.",
+    "auth/operation-not-allowed": "התחברות באימייל/סיסמה כבויה ב-Firebase.",
+    "auth/network-request-failed": "שגיאת רשת. בדוק את החיבור לאינטרנט."
+  };
+  return map[code] || "שגיאה: " + code;
+}
+
+// ── Send token back to Python ──
+
+function sendTokenToStreamlit(user) {
+  user.getIdToken(true).then(function(idToken) {
+    var refreshToken = "";
+    try {
+      refreshToken = user && user.stsTokenManager ? (user.stsTokenManager.refreshToken || "") : "";
+    } catch (e) {}
+    setComponentValue({
+      idToken: idToken,
+      email: user.email,
+      displayName: user.displayName || user.email.split("@")[0],
+      uid: user.uid,
+      refreshToken: refreshToken
+    });
+  }).catch(function(e) {
+    showError("שגיאה בקבלת טוקן: " + e.message);
+  });
+}
+
+// ── Auth actions ──
+
+function doLogin() {
+  hideMessages();
+  var email = document.getElementById("loginEmail").value.trim();
+  var password = document.getElementById("loginPassword").value;
+  if (!email) { showError("אנא הזן אימייל"); return; }
+  if (!password) { showError("אנא הזן סיסמה"); return; }
+
+  showSpinner();
+  document.getElementById("loginBtn").disabled = true;
+
+  ensureLocalPersistence()
+    .then(function() { return auth.signInWithEmailAndPassword(email, password); })
+    .then(function(result) { return sendTokenToStreamlit(result.user); })
+    .catch(function(e) { showError(translateFirebaseError(e.code)); })
+    .finally(function() {
+      hideSpinner();
+      document.getElementById("loginBtn").disabled = false;
+    });
+}
+
+function doRegister() {
+  hideMessages();
+  var email = document.getElementById("regEmail").value.trim();
+  var password = document.getElementById("regPassword").value;
+  var password2 = document.getElementById("regPassword2").value;
+  if (!email) { showError("אנא הזן אימייל"); return; }
+  if (!password || password.length < 6) { showError("הסיסמה חייבת להכיל לפחות 6 תווים"); return; }
+  if (password !== password2) { showError("הסיסמאות אינן תואמות"); return; }
+
+  showSpinner();
+  document.getElementById("regBtn").disabled = true;
+
+  ensureLocalPersistence()
+    .then(function() { return auth.createUserWithEmailAndPassword(email, password); })
+    .then(function(result) { return sendTokenToStreamlit(result.user); })
+    .catch(function(e) { showError(translateFirebaseError(e.code)); })
+    .finally(function() {
+      hideSpinner();
+      document.getElementById("regBtn").disabled = false;
+    });
+}
+
+function doReset() {
+  hideMessages();
+  var email = document.getElementById("resetEmail").value.trim();
+  if (!email) { showError("אנא הזן אימייל"); return; }
+
+  showSpinner();
+  auth.sendPasswordResetEmail(email)
+    .then(function() { showSuccess("נשלח קישור לאיפוס סיסמה לאימייל שלך"); })
+    .catch(function(e) { showError(translateFirebaseError(e.code)); })
+    .finally(function() { hideSpinner(); });
+}
+
+// Allow Enter key to submit
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Enter") {
+    var active = document.querySelector(".tab-content.active");
+    if (active && active.id === "tab-login") doLogin();
+    else if (active && active.id === "tab-register") doRegister();
+    else if (active && active.id === "tab-reset") doReset();
+  }
+});
+</script>
+
+</body>
+</html>

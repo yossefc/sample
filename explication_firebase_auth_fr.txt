@@ -1,0 +1,25 @@
+Explication en francais - Firebase Auth et Admin SDK
+
+Point cle:
+Le Firebase Admin SDK peut gerer les utilisateurs (creer, lire, supprimer) et verifier des tokens,
+mais il ne peut PAS connecter un utilisateur avec email/mot de passe.
+
+Option 1 - Garder le REST API signInWithPassword
+- Tu gardes le login actuel via Firebase REST API.
+- C'est la solution la plus simple et rapide pour ton app Streamlit actuelle.
+- La web_api_key doit etre bien restreinte (origines autorisees).
+- C'est normal d'utiliser cette cle pour ce flux.
+
+Option 2 - Login frontend Firebase + verify_id_token cote serveur
+- Le navigateur fait la connexion avec Firebase JS SDK (email, Google, etc.).
+- Le serveur Streamlit verifie ensuite le token avec firebase_admin.auth.verify_id_token().
+- C'est plus propre a long terme, mais demande plus de developpement (composant JS/HTML).
+
+Option 3 - Custom token Admin SDK
+- Admin SDK peut generer un custom token.
+- Mais il ne peut toujours pas verifier le mot de passe.
+- Donc cette option ne remplace pas un vrai login email/mot de passe toute seule.
+
+Recommandation pratique pour ton projet
+- Court terme: Option 1 (REST) pour avancer vite et stabiliser.
+- Moyen/long terme: migrer vers Option 2 si tu veux une architecture plus propre et evolutive.

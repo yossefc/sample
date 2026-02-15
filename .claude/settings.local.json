@@ -29,7 +29,18 @@
       "Bash(cmd /c \"cd /d C:\\\\Users\\\\USER\\\\Downloads\\\\sample && if exist fix3.py \\(echo EXISTS\\) else \\(echo GONE\\)\")",
       "Bash(powershell -Command \"Get-ChildItem C:\\\\Users\\\\USER\\\\Downloads\\\\sample -Filter *.py | Select-Object -ExpandProperty Name\")",
       "Bash(powershell -Command \"Remove-Item -Force ''C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\fix3.py'',''C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\patch_app.py'',''C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\patch2.py'',''C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\users_config.yaml'',''C:\\\\Users\\\\USER\\\\Downloads\\\\sample\\\\payments_db.json''\")",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git add:*)",
+      "Bash(findstr:*)",
+      "Bash(gcloud --version:*)",
+      "Bash(firebase --version:*)",
+      "Bash(docker --version:*)",
+      "Bash(gcloud auth:*)",
+      "Bash(gcloud config get-value:*)",
+      "Bash(gcloud builds submit:*)",
+      "Bash(gcloud services enable:*)"
     ]
   }
 }

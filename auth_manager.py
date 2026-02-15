@@ -5,6 +5,10 @@ Uses Firebase Auth REST API (email/password) server-side.
 Requires `web_api_key` and `project_id` in Streamlit secrets under [firebase].
 """
 
+import json
+import secrets
+import time
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import requests
@@ -14,7 +18,13 @@ from db_manager import (
     get_school,
     get_user_permission,
     list_schools_for_user,
+    verify_firebase_token,
 )
+
+try:
+    from firebase_auth_component import firebase_auth_widget
+except Exception:
+    firebase_auth_widget = None
 
 
 # ───────────────────────────────────────────────
@@ -73,6 +83,344 @@ def _get_web_api_key() -> str:
     if not key:
         key = st.secrets.get("auth", {}).get("web_api_key", "")
     return str(key).strip()
+
+
+def _get_project_id() -> str:
+    """Resolve Firebase project id from Streamlit secrets."""
+    project_id = st.secrets.get("firebase", {}).get("project_id", "")
+    if not project_id:
+        project_id = st.secrets.get("auth", {}).get("project_id", "")
+    if not project_id:
+        try:
+            key_path = Path(__file__).parent / "firestore-key.json"
+            if key_path.exists():
+                data = json.loads(key_path.read_text(encoding="utf-8"))
+                project_id = data.get("project_id", "")
+        except Exception:
+            pass
+    return str(project_id).strip()
+
+
+def _get_auth_domain(project_id: str) -> str:
+    """Resolve Firebase auth domain, with default <project>.firebaseapp.com."""
+    auth_domain = st.secrets.get("auth", {}).get("auth_domain", "")
+    if not auth_domain:
+        auth_domain = st.secrets.get("firebase", {}).get("auth_domain", "")
+    if not auth_domain and project_id:
+        auth_domain = f"{project_id}.firebaseapp.com"
+    return str(auth_domain).strip()
+
+
+def _can_use_browser_auth() -> bool:
+    """Check if browser Firebase widget can be used."""
+    return bool(firebase_auth_widget and _get_web_api_key() and _get_project_id())
+
+
+_AUTH_SESSION_FILE = Path(__file__).parent / ".auth_sessions.json"
+_AUTH_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
+
+
+def _now_ts() -> int:
+    return int(time.time())
+
+
+def _load_auth_sessions() -> dict:
+    """Load persisted browser sessions and drop expired entries."""
+    try:
+        if not _AUTH_SESSION_FILE.exists():
+            return {}
+        raw = json.loads(_AUTH_SESSION_FILE.read_text(encoding="utf-8"))
+        sessions = raw.get("sessions", raw) if isinstance(raw, dict) else {}
+        if not isinstance(sessions, dict):
+            return {}
+    except Exception:
+        return {}
+
+    now = _now_ts()
+    cleaned = {}
+    changed = False
+    for sid, info in sessions.items():
+        if not isinstance(info, dict):
+            changed = True
+            continue
+        exp = int(info.get("expires_at", 0) or 0)
+        if exp and exp < now:
+            changed = True
+            continue
+        cleaned[str(sid)] = info
+
+    if changed:
+        _save_auth_sessions(cleaned)
+    return cleaned
+
+
+def _save_auth_sessions(sessions: dict):
+    """Persist browser sessions to local JSON file."""
+    try:
+        payload = {"sessions": sessions}
+        tmp = _AUTH_SESSION_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(_AUTH_SESSION_FILE)
+    except Exception:
+        pass
+
+
+def _set_query_param(name: str, value: str):
+    try:
+        st.query_params[name] = value
+    except Exception:
+        pass
+
+
+def _remove_query_param(name: str):
+    try:
+        st.query_params.pop(name, None)
+        return
+    except Exception:
+        pass
+    try:
+        if name in st.query_params:
+            del st.query_params[name]
+    except Exception:
+        pass
+
+
+def _persist_login_session(email: str, name: str, refresh_token: str = ""):
+    """Create or update persistent session id in query params."""
+    if not email:
+        return
+
+    sessions = _load_auth_sessions()
+    sid = str(st.session_state.get("auth_sid", "")).strip() or str(st.query_params.get("sid", "")).strip()
+    now = _now_ts()
+
+    if not sid or sid not in sessions:
+        sid = secrets.token_urlsafe(24)
+        session_data = {"created_at": now}
+    else:
+        session_data = sessions[sid]
+
+    session_data.update(
+        {
+            "email": email.lower(),
+            "name": name or email.split("@")[0],
+            "updated_at": now,
+            "expires_at": now + _AUTH_SESSION_TTL_SECONDS,
+        }
+    )
+    if refresh_token:
+        session_data["refresh_token"] = refresh_token
+
+    sessions[sid] = session_data
+    _save_auth_sessions(sessions)
+
+    st.session_state["auth_sid"] = sid
+    _set_query_param("sid", sid)
+
+
+def _clear_persistent_login_session():
+    """Remove persistent session id and backing stored session."""
+    sid = str(st.session_state.get("auth_sid", "")).strip() or str(st.query_params.get("sid", "")).strip()
+    if sid:
+        sessions = _load_auth_sessions()
+        if sid in sessions:
+            sessions.pop(sid, None)
+            _save_auth_sessions(sessions)
+
+    st.session_state.pop("auth_sid", None)
+    _remove_query_param("sid")
+
+
+def _firebase_lookup_by_id_token(id_token: str) -> dict | None:
+    """Fallback identity lookup from Firebase REST when Admin verify fails."""
+    api_key = _get_web_api_key()
+    if not api_key:
+        return None
+
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={api_key}"
+    payload = {"idToken": id_token}
+    headers = _build_origin_headers()
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=15)
+        data = resp.json()
+        if "error" in data:
+            return None
+        users = data.get("users", [])
+        if not users:
+            return None
+        user = users[0] or {}
+        return {
+            "email": str(user.get("email", "")).strip().lower(),
+            "uid": str(user.get("localId", "")).strip(),
+        }
+    except Exception:
+        return None
+
+
+def _identity_from_id_token(id_token: str) -> dict | None:
+    """Resolve user identity from id token via Admin SDK, then REST fallback."""
+    claims = verify_firebase_token(id_token)
+    if claims:
+        return {
+            "email": str(claims.get("email", "")).strip().lower(),
+            "uid": str(claims.get("uid", "")).strip(),
+            "exp": claims.get("exp"),
+        }
+
+    fallback = _firebase_lookup_by_id_token(id_token)
+    if fallback:
+        return {"email": fallback.get("email", ""), "uid": fallback.get("uid", ""), "exp": None}
+    return None
+
+
+def _firebase_refresh_id_token(refresh_token: str) -> dict:
+    """Exchange Firebase refresh token for new id token."""
+    api_key = _get_web_api_key()
+    if not api_key:
+        return {"error": "missing_api_key"}
+    if not refresh_token:
+        return {"error": "missing_refresh_token"}
+
+    url = f"https://securetoken.googleapis.com/v1/token?key={api_key}"
+    payload = {"grant_type": "refresh_token", "refresh_token": refresh_token}
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    try:
+        resp = requests.post(url, data=payload, headers=headers, timeout=15)
+        data = resp.json()
+        if "error" in data:
+            err = data.get("error", {}) if isinstance(data.get("error"), dict) else {}
+            return {"error": err.get("message", "refresh_failed")}
+        return {
+            "idToken": str(data.get("id_token", "")).strip(),
+            "refreshToken": str(data.get("refresh_token", "")).strip() or refresh_token,
+            "expiresIn": str(data.get("expires_in", "")).strip(),
+            "userId": str(data.get("user_id", "")).strip(),
+        }
+    except Exception as ex:
+        return {"error": str(ex)}
+
+
+def _restore_login_from_persistent_session() -> dict | None:
+    """Restore login from persistent sid + refresh token."""
+    sid = str(st.query_params.get("sid", "")).strip()
+    if not sid:
+        return None
+
+    sessions = _load_auth_sessions()
+    info = sessions.get(sid)
+    if not isinstance(info, dict):
+        _remove_query_param("sid")
+        return None
+
+    refresh_token = str(info.get("refresh_token", "")).strip()
+    if not refresh_token:
+        sessions.pop(sid, None)
+        _save_auth_sessions(sessions)
+        _remove_query_param("sid")
+        return None
+
+    refreshed = _firebase_refresh_id_token(refresh_token)
+    if "error" in refreshed:
+        sessions.pop(sid, None)
+        _save_auth_sessions(sessions)
+        _remove_query_param("sid")
+        return None
+
+    id_token = refreshed.get("idToken", "")
+    identity = _identity_from_id_token(id_token)
+    if not identity:
+        sessions.pop(sid, None)
+        _save_auth_sessions(sessions)
+        _remove_query_param("sid")
+        return None
+
+    email = str(identity.get("email", "")).strip().lower()
+    if not email:
+        sessions.pop(sid, None)
+        _save_auth_sessions(sessions)
+        _remove_query_param("sid")
+        return None
+
+    name = str(info.get("name", "")).strip() or email.split("@")[0]
+    uid = str(identity.get("uid", "")).strip() or refreshed.get("userId", "")
+
+    st.session_state["auth_email"] = email
+    st.session_state["auth_name"] = name
+    st.session_state["auth_token"] = id_token
+    st.session_state["auth_refresh_token"] = refreshed.get("refreshToken", refresh_token)
+    st.session_state["auth_sid"] = sid
+    if uid:
+        st.session_state["auth_uid"] = uid
+    if identity.get("exp"):
+        st.session_state["auth_token_exp"] = identity.get("exp")
+
+    _persist_login_session(email, name, st.session_state.get("auth_refresh_token", ""))
+    return {"email": email, "name": name}
+
+
+def _consume_browser_auth_payload(payload: dict | None) -> dict | None:
+    """Verify widget payload, then save authenticated user in session_state."""
+    if not isinstance(payload, dict):
+        return None
+
+    status = str(payload.get("status", "")).strip()
+    if status:
+        return {"status": status}
+
+    id_token = str(payload.get("idToken", "")).strip()
+    email = str(payload.get("email", "")).strip().lower()
+    if not id_token or not email:
+        return None
+
+    identity = _identity_from_id_token(id_token)
+    if not identity:
+        return {"status": "invalid_token"}
+
+    identity_email = str(identity.get("email", "")).strip().lower()
+    if identity_email:
+        email = identity_email
+
+    name = str(payload.get("displayName", "")).strip() or email.split("@")[0]
+    uid = str(payload.get("uid", "")).strip() or str(identity.get("uid", "")).strip()
+    refresh_token = str(payload.get("refreshToken", "")).strip()
+
+    st.session_state["auth_email"] = email
+    st.session_state["auth_name"] = name
+    st.session_state["auth_token"] = id_token
+    if refresh_token:
+        st.session_state["auth_refresh_token"] = refresh_token
+    if uid:
+        st.session_state["auth_uid"] = uid
+    if identity.get("exp"):
+        st.session_state["auth_token_exp"] = identity.get("exp")
+
+    _persist_login_session(email, name, st.session_state.get("auth_refresh_token", ""))
+
+    return {"status": "authenticated", "email": email, "name": name}
+
+
+def _render_browser_auth_widget(action: str = "auth", height: int = 520, key: str = "firebase_auth"):
+    """Render browser Firebase auth widget and return its payload."""
+    if not _can_use_browser_auth():
+        return None
+
+    project_id = _get_project_id()
+    auth_domain = _get_auth_domain(project_id)
+    api_key = _get_web_api_key()
+    if not auth_domain:
+        return None
+
+    try:
+        return firebase_auth_widget(
+            api_key=api_key,
+            auth_domain=auth_domain,
+            project_id=project_id,
+            height=height,
+            action=action,
+            key=key,
+        )
+    except Exception:
+        return None
 
 
 def _build_origin_headers() -> dict:
@@ -278,6 +626,12 @@ def _handle_login(email: str, password: str):
         st.session_state["auth_email"] = resp["email"].lower()
         st.session_state["auth_name"] = resp.get("displayName") or resp["email"].split("@")[0]
         st.session_state["auth_token"] = resp["idToken"]
+        st.session_state["auth_refresh_token"] = resp.get("refreshToken", "")
+        _persist_login_session(
+            st.session_state["auth_email"],
+            st.session_state["auth_name"],
+            st.session_state.get("auth_refresh_token", ""),
+        )
         st.rerun()
 
 
@@ -309,6 +663,12 @@ def _handle_register(email: str, password: str, password2: str):
         st.session_state["auth_email"] = resp["email"].lower()
         st.session_state["auth_name"] = resp.get("displayName") or resp["email"].split("@")[0]
         st.session_state["auth_token"] = resp["idToken"]
+        st.session_state["auth_refresh_token"] = resp.get("refreshToken", "")
+        _persist_login_session(
+            st.session_state["auth_email"],
+            st.session_state["auth_name"],
+            st.session_state.get("auth_refresh_token", ""),
+        )
         st.success("נרשמת בהצלחה!")
         st.rerun()
 
@@ -369,7 +729,35 @@ def authenticate() -> dict:
                     result["allowed_classes"] = [pub_class]
         return result
 
-    # Session-authenticated user (Firebase email/password)
+    # Explicit logout request (browser + server)
+    if st.session_state.get("auth_logout_requested"):
+        _clear_persistent_login_session()
+        st.session_state.pop("auth_refresh_token", None)
+        if _can_use_browser_auth():
+            payload = _render_browser_auth_widget(action="logout", height=1, key="firebase_auth_logout")
+            state = _consume_browser_auth_payload(payload)
+            if state and state.get("status") == "logged_out":
+                st.session_state.pop("auth_logout_requested", None)
+                st.rerun()
+            if state and state.get("status") == "logout_error":
+                st.session_state.pop("auth_logout_requested", None)
+                st.warning("לא ניתן היה להתנתק בדפדפן. נסה שוב.")
+            else:
+                st.info("מתנתק...")
+            return result
+        st.session_state.pop("auth_logout_requested", None)
+
+    # Restore persistent login (survives browser refresh)
+    if "auth_email" not in st.session_state:
+        restored = _restore_login_from_persistent_session()
+        if restored:
+            email = restored["email"]
+            result["authenticated"] = True
+            result["email"] = email
+            result["name"] = restored.get("name", email)
+            return _resolve_schools(result, email)
+
+    # Session-authenticated user
     if "auth_email" in st.session_state:
         email = st.session_state["auth_email"]
         name = st.session_state.get("auth_name", email)
@@ -378,7 +766,24 @@ def authenticate() -> dict:
         result["name"] = name
         return _resolve_schools(result, email)
 
-    # Not logged in - show login UI
+    # Browser auth widget: keeps user signed-in across refresh
+    if _can_use_browser_auth():
+        payload = _render_browser_auth_widget(action="auth", height=560, key="firebase_auth_main")
+        state = _consume_browser_auth_payload(payload)
+        if state and state.get("status") == "authenticated":
+            email = state["email"]
+            result["authenticated"] = True
+            result["email"] = email
+            result["name"] = state.get("name", email)
+            return _resolve_schools(result, email)
+        if state and state.get("status") == "invalid_token":
+            _clear_persistent_login_session()
+            for k in ("auth_email", "auth_name", "auth_token", "auth_uid", "auth_token_exp", "auth_refresh_token", "auth_sid"):
+                st.session_state.pop(k, None)
+            st.error("תוקף ההתחברות פג. התחבר שוב.")
+        return result
+
+    # Fallback: REST login UI
     _render_login_ui()
     return result
 
