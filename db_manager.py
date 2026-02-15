@@ -110,6 +110,14 @@ def _get_db():
     return _db
 
 
+def _clear_user_school_lookup_cache():
+    """Best-effort cache invalidation for per-user school lookup."""
+    try:
+        list_schools_for_user.clear()
+    except Exception:
+        pass
+
+
 def verify_firebase_token(id_token: str) -> dict | None:
     """Verify a Firebase ID token and return the decoded claims.
 
@@ -172,6 +180,7 @@ def update_school(school_id: str, updates: dict):
     """Partial update on school document."""
     db = _get_db()
     db.collection("schools").document(school_id).update(updates)
+    _clear_user_school_lookup_cache()
 
 
 def set_subscription(school_id: str, status: str, expiry_date: str):
@@ -228,6 +237,7 @@ def _sync_user_school(email: str, school_id: str, role: str, allowed_classes: li
         "allowed_classes": allowed_classes,
     }
     doc_ref.set({"schools": schools_map}, merge=True)
+    _clear_user_school_lookup_cache()
 
 
 def _remove_user_school(email: str, school_id: str):
@@ -244,6 +254,7 @@ def _remove_user_school(email: str, school_id: str):
     _remove_legacy_nested_school_key(schools_map, school_id)
 
     doc_ref.set({"schools": schools_map}, merge=True)
+    _clear_user_school_lookup_cache()
 
 
 def _get_user_schools_map(user_doc) -> dict:
@@ -346,6 +357,7 @@ def _fallback_permissions_lookup(email_lower: str) -> list[tuple[str, dict]]:
     return entries
 
 
+@st.cache_data(ttl=20, show_spinner=False)
 def list_schools_for_user(email: str) -> list[dict]:
     """Return all schools where the user has access (owner or teacher)."""
     db = _get_db()
@@ -412,6 +424,8 @@ def add_class_to_school(school_id: str, class_name: str):
     school_ref = db.collection("schools").document(school_id)
     school_ref.update({"classes": firestore.ArrayUnion([class_name])})
     school_ref.collection("classes").document(class_name).set({"events": []}, merge=True)
+    get_schedule.clear()
+    _clear_user_school_lookup_cache()
 
 
 # ===================================================================
@@ -420,6 +434,7 @@ def add_class_to_school(school_id: str, class_name: str):
 
 def set_teacher_permission(school_id: str, teacher_email: str, allowed_classes: list[str], role: str = "teacher"):
     """Grant a user (teacher/director) access to specific classes."""
+    get_permissions.clear()
     db = _get_db()
     db.collection("schools").document(school_id) \
         .collection("permissions").document(teacher_email.lower()).set({
@@ -433,12 +448,14 @@ def set_teacher_permission(school_id: str, teacher_email: str, allowed_classes: 
 
 def remove_teacher_permission(school_id: str, teacher_email: str):
     """Revoke teacher access."""
+    get_permissions.clear()
     db = _get_db()
     db.collection("schools").document(school_id) \
         .collection("permissions").document(teacher_email.lower()).delete()
     _remove_user_school(teacher_email, school_id)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def get_permissions(school_id: str) -> dict:
     """Return dict of {email: {role, allowed_classes}} for a school."""
     db = _get_db()
@@ -545,6 +562,7 @@ def save_schedule(school_id: str, schedule_data: dict):
 # GLOBAL MINISTRY DATA
 # ===================================================================
 
+@st.cache_data(ttl=60, show_spinner=False)
 def get_ministry_exams() -> list[dict]:
     """Fetch all ministry exam records."""
     db = _get_db()
@@ -570,6 +588,8 @@ def get_ministry_exam(code: str) -> dict | None:
 
 def save_ministry_exams(exams: list[dict], moed: str = "", source: str = ""):
     """Bulk upsert ministry exams. Also stores metadata."""
+    get_ministry_exams.clear()
+    get_ministry_meta.clear()
     db = _get_db()
     batch = db.batch()
     meta_ref = db.collection("global_ministry_data").document("_metadata")
@@ -593,6 +613,7 @@ def save_ministry_exams(exams: list[dict], moed: str = "", source: str = ""):
     batch.commit()
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def get_ministry_meta() -> dict:
     """Get ministry data metadata (last_updated, moed, count)."""
     db = _get_db()
@@ -623,6 +644,7 @@ def search_ministry_exams(query: str) -> list[dict]:
 # GLOBAL HOLIDAYS
 # ===================================================================
 
+@st.cache_data(ttl=60, show_spinner=False)
 def get_holidays(year: str) -> dict:
     """Get holidays for a given year."""
     db = _get_db()
@@ -634,6 +656,7 @@ def get_holidays(year: str) -> dict:
 
 def save_holidays(year: str, data: dict):
     """Save holidays for a given year."""
+    get_holidays.clear()
     db = _get_db()
     db.collection("global_holidays").document(str(year)).set(data)
 
