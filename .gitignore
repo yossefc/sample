@@ -7,9 +7,13 @@ firestore-key.json.json
 *.log
 .env
 venv/
+.venv/
 *.bat
 patch*.py
 fix*.py
 migrate_*.py
 resume_*.txt
 *.tmp
+checklist_*.txt
+etapes_*.txt
+prompt_*.txt

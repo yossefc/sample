@@ -22,8 +22,11 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import streamlit as st
+
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 # ---------------------------------------------------------------------------
 # INITIALISATION
@@ -146,7 +149,7 @@ def get_school(school_id: str) -> dict | None:
     db = _get_db()
     doc = db.collection("schools").document(school_id).get()
     if doc.exists:
-        data = doc.to_dict()
+        data = doc.to_dict() or {}
         data["id"] = doc.id
         return data
     return None
@@ -202,21 +205,132 @@ def _sync_user_school(email: str, school_id: str, role: str, allowed_classes: li
     """
     db = _get_db()
     doc_ref = db.collection("user_schools").document(email.lower())
-    doc_ref.set({
-        f"schools.{school_id}": {
-            "role": role,
-            "allowed_classes": allowed_classes,
-        }
-    }, merge=True)
+    user_doc = doc_ref.get()
+    schools_map = _get_user_schools_map(user_doc)
+
+    # Cleanup old field-path-style nesting for dotted IDs, then write safe map key.
+    _remove_legacy_nested_school_key(schools_map, school_id)
+    schools_map[school_id] = {
+        "role": role,
+        "allowed_classes": allowed_classes,
+    }
+    doc_ref.set({"schools": schools_map}, merge=True)
 
 
 def _remove_user_school(email: str, school_id: str):
     """Remove a school from a user's lookup doc."""
     db = _get_db()
     doc_ref = db.collection("user_schools").document(email.lower())
-    doc_ref.update({
-        f"schools.{school_id}": firestore.DELETE_FIELD,
-    })
+    user_doc = doc_ref.get()
+    if not user_doc.exists:
+        return
+
+    schools_map = _get_user_schools_map(user_doc)
+    if school_id in schools_map:
+        del schools_map[school_id]
+    _remove_legacy_nested_school_key(schools_map, school_id)
+
+    doc_ref.set({"schools": schools_map}, merge=True)
+
+
+def _get_user_schools_map(user_doc) -> dict:
+    """Extract the schools map from user_schools/{email} doc."""
+    if not user_doc.exists:
+        return {}
+    data = user_doc.to_dict() or {}
+    schools_map = data.get("schools", {})
+    return schools_map if isinstance(schools_map, dict) else {}
+
+
+def _iter_school_lookup_entries(schools_map: dict):
+    """Yield (school_id, info) entries and tolerate legacy dotted-ID nesting."""
+    stack = [("", schools_map)]
+    while stack:
+        prefix, node = stack.pop()
+        if not isinstance(node, dict):
+            continue
+
+        # Leaf entry: expected permission payload.
+        if "role" in node or "allowed_classes" in node:
+            if prefix:
+                yield prefix, node
+            continue
+
+        for key, value in node.items():
+            child_prefix = f"{prefix}.{key}" if prefix else str(key)
+            if isinstance(value, dict):
+                stack.append((child_prefix, value))
+
+
+def _remove_legacy_nested_school_key(schools_map: dict, school_id: str):
+    """Best-effort cleanup of old nested maps created from dotted field paths."""
+    parts = school_id.split(".")
+    if len(parts) <= 1:
+        return
+
+    parents = []
+    cursor = schools_map
+    for part in parts[:-1]:
+        if not isinstance(cursor, dict) or part not in cursor or not isinstance(cursor[part], dict):
+            return
+        parents.append((cursor, part))
+        cursor = cursor[part]
+
+    if isinstance(cursor, dict) and parts[-1] in cursor:
+        del cursor[parts[-1]]
+
+    # Prune empty dict branches.
+    for parent, key in reversed(parents):
+        child = parent.get(key)
+        if isinstance(child, dict) and not child:
+            del parent[key]
+        else:
+            break
+
+
+def _fallback_permissions_lookup(email_lower: str) -> list[tuple[str, dict]]:
+    """Fallback lookup for legacy/missing user_schools entries.
+
+    1) Try collection-group query (fast path).
+    2) If indexing/policy blocks that query, fall back to index-free scan.
+    """
+    db = _get_db()
+    entries: list[tuple[str, dict]] = []
+
+    # Fast path (may fail if collection-group indexing is disabled/restricted).
+    try:
+        docs = db.collection_group("permissions").where(
+            filter=FieldFilter("email", "==", email_lower)
+        ).stream()
+        for doc in docs:
+            school_ref = doc.reference.parent.parent
+            if not school_ref:
+                continue
+            info = doc.to_dict() or {}
+            entries.append((school_ref.id, info))
+        return entries
+    except Exception:
+        entries = []
+
+    # Index-free path: iterate schools and read permissions/{email} directly.
+    try:
+        school_docs = db.collection("schools").stream()
+    except Exception:
+        return entries
+
+    for school_doc in school_docs:
+        school_id = school_doc.id
+        try:
+            perm_doc = db.collection("schools").document(school_id) \
+                .collection("permissions").document(email_lower).get()
+        except Exception:
+            continue
+        if not perm_doc.exists:
+            continue
+        info = perm_doc.to_dict() or {}
+        entries.append((school_id, info))
+
+    return entries
 
 
 def list_schools_for_user(email: str) -> list[dict]:
@@ -227,29 +341,54 @@ def list_schools_for_user(email: str) -> list[dict]:
     seen_ids = set()
 
     # 1) Check schools where user is owner
-    owner_query = db.collection("schools").where("owner_email", "==", email_lower).stream()
+    owner_query = db.collection("schools").where(filter=FieldFilter("owner_email", "==", email_lower)).stream()
     for doc in owner_query:
-        d = doc.to_dict()
+        d = doc.to_dict() or {}
         d["id"] = doc.id
         d["user_role"] = "director"
         results.append(d)
         seen_ids.add(doc.id)
 
     # 2) Check user_schools lookup doc (for teacher invitations)
+    lookup_hits = 0
     user_doc = db.collection("user_schools").document(email_lower).get()
     if user_doc.exists:
-        schools_map = user_doc.to_dict().get("schools", {})
-        for school_id, info in schools_map.items():
+        schools_map = _get_user_schools_map(user_doc)
+        for school_id, info in _iter_school_lookup_entries(schools_map):
             if school_id in seen_ids:
                 continue
             school_doc = db.collection("schools").document(school_id).get()
             if school_doc.exists:
-                d = school_doc.to_dict()
+                d = school_doc.to_dict() or {}
                 d["id"] = school_doc.id
                 d["user_role"] = info.get("role", "teacher")
-                d["allowed_classes"] = info.get("allowed_classes", [])
+                allowed_classes = info.get("allowed_classes", [])
+                d["allowed_classes"] = allowed_classes if isinstance(allowed_classes, list) else []
                 results.append(d)
                 seen_ids.add(school_id)
+                lookup_hits += 1
+
+    # 3) Legacy/backfill path: permissions collection-group lookup.
+    # This heals users invited before lookup-map fixes.
+    if lookup_hits == 0:
+        for school_id, info in _fallback_permissions_lookup(email_lower):
+            if school_id in seen_ids:
+                continue
+            school_doc = db.collection("schools").document(school_id).get()
+            if not school_doc.exists:
+                continue
+            d = school_doc.to_dict() or {}
+            d["id"] = school_doc.id
+            role = info.get("role", "teacher")
+            allowed_classes = info.get("allowed_classes", [])
+            allowed_classes = allowed_classes if isinstance(allowed_classes, list) else []
+            d["user_role"] = role
+            d["allowed_classes"] = allowed_classes
+            results.append(d)
+            seen_ids.add(school_id)
+
+            # Rebuild top-level lookup for future logins.
+            _sync_user_school(email_lower, school_id, role, allowed_classes)
 
     return results
 
@@ -346,18 +485,17 @@ def remove_event(school_id: str, class_name: str, event: dict):
             "events": firestore.ArrayRemove([event])
         })
 
-
 # ===================================================================
 # SCHEDULE WEEK STRUCTURE
 # ===================================================================
 
+@st.cache_data(ttl=30, show_spinner=False)
 def get_schedule(school_id: str) -> dict:
     """Get the full schedule structure (weeks + metadata) for a school."""
     school = get_school(school_id)
     if not school:
         return {"classes": [], "year": "", "weeks": [], "parashat_hashavua": {}}
 
-    # Weeks are stored as a JSON blob in a dedicated doc
     db = _get_db()
     weeks_doc = db.collection("schools").document(school_id) \
         .collection("schedule_meta").document("weeks").get()
@@ -375,6 +513,8 @@ def get_schedule(school_id: str) -> dict:
 
 def save_schedule(school_id: str, schedule_data: dict):
     """Save the full schedule (weeks + metadata)."""
+    # Clear cached schedule so next read picks up fresh data
+    get_schedule.clear()
     db = _get_db()
     school_ref = db.collection("schools").document(school_id)
     school_ref.update({
@@ -398,7 +538,7 @@ def get_ministry_exams() -> list[dict]:
     exams = []
     docs = db.collection("global_ministry_data").stream()
     for doc in docs:
-        d = doc.to_dict()
+        d = doc.to_dict() or {}
         d["code"] = doc.id
         exams.append(d)
     return exams
@@ -409,7 +549,7 @@ def get_ministry_exam(code: str) -> dict | None:
     db = _get_db()
     doc = db.collection("global_ministry_data").document(str(code)).get()
     if doc.exists:
-        d = doc.to_dict()
+        d = doc.to_dict() or {}
         d["code"] = doc.id
         return d
     return None
@@ -506,7 +646,7 @@ def get_payments(school_id: str) -> list[dict]:
     docs = db.collection("schools").document(school_id) \
         .collection("payments").order_by("created_at", direction=firestore.Query.DESCENDING).stream()
     for doc in docs:
-        d = doc.to_dict()
+        d = doc.to_dict() or {}
         d["id"] = doc.id
         payments.append(d)
     return payments

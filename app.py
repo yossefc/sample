@@ -6,12 +6,12 @@ Modules:
   2. Authentication & Roles (Director / Teacher / Parent-Public)
   3. Visual Scheduler (color-coded grid with Hebrew calendar)
   4. Intelligent Features (Ministry sync, conflict detection, WhatsApp share)
-  5. Payments (billing structure per class)
 
 No hardcoded dates - all dates come from Firestore or external APIs.
 """
 
 import io
+import re
 import urllib.parse
 from datetime import datetime, timedelta
 
@@ -21,25 +21,18 @@ import streamlit as st
 from auth_manager import authenticate
 from db_manager import (
     add_class_to_school,
-    add_event,
-    add_payment,
     create_school,
-    delete_payment,
     get_holidays,
     get_ministry_exam,
     get_ministry_exams,
     get_ministry_meta,
-    get_payments,
-    get_payments_for_class,
     get_permissions,
     get_schedule,
-    remove_event,
     remove_teacher_permission,
     save_ministry_exams,
     save_schedule,
     search_ministry_exams,
     set_teacher_permission,
-    update_school,
 )
 
 # ===================================================================
@@ -65,6 +58,317 @@ MONTH_NAMES_HEB = {
     5: "מאי", 6: "יוני", 7: "יולי", 8: "אוגוסט",
     9: "ספטמבר", 10: "אוקטובר", 11: "נובמבר", 12: "דצמבר",
 }
+
+
+# ===================================================================
+# CSS — Visual Polish
+# ===================================================================
+
+APP_CSS = """<style>
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap');
+
+/* ── Global RTL & Font ── */
+html, body, .stApp {
+    direction: rtl;
+    font-family: 'Heebo', sans-serif;
+}
+
+/* ── Hide default Streamlit chrome ── */
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+div[data-testid="stToolbar"] {display: none;}
+div[data-testid="stDecoration"] {display: none;}
+
+/* ── Main content: full width ── */
+.block-container {
+    padding-top: 1rem;
+    padding-bottom: 0;
+    max-width: 100% !important;
+}
+
+/* ── Title area (hidden when top-bar present; kept for public view) ── */
+.app-title {
+    text-align: center;
+    padding: 1.2rem 0 0.2rem;
+}
+.app-title h1 {
+    color: #1A237E;
+    font-weight: 900;
+    font-size: 2.2rem;
+    margin: 0;
+    line-height: 1.2;
+}
+.app-title p {
+    color: #9E9E9E;
+    font-size: 1.15rem;
+    margin: 0.15rem 0 0;
+    font-weight: 400;
+}
+/* Hide duplicate title inside tabs (top-bar already shows it) */
+div[data-testid="stTabs"] .app-title { display: none; }
+
+/* ── Calendar header row ── */
+.cal-hdr {
+    background: linear-gradient(135deg, #1A237E, #283593);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.82em;
+    text-align: center;
+    padding: 10px 4px;
+    border-radius: 8px 8px 0 0;
+}
+
+/* ── Legend chips ── */
+.legend-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    justify-content: center; margin: 8px 0 14px;
+}
+.legend-chip {
+    padding: 4px 14px; border-radius: 20px;
+    font-size: 0.78em; font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.cal-parasha {
+    background: #FFF8E1; color: #F57F17; font-weight: 700;
+    padding: 2px 7px; border-radius: 10px; font-size: 0.72em;
+}
+
+/* ── Cell popover trigger (small + button) ── */
+.stColumn > div { gap: 2px; }
+div[data-testid="stPopover"] button {
+    font-size: 0.75em !important; padding: 0 4px !important;
+    min-height: 0 !important; height: 20px !important;
+    line-height: 20px !important; border-radius: 4px !important;
+    background: #E8EAF6 !important; border: 1px solid #C5CAE9 !important;
+    color: #3949AB !important; cursor: pointer !important;
+    width: 100% !important;
+}
+div[data-testid="stPopover"] button:hover { background: #C5CAE9 !important; }
+
+/* ── Ministry card ── */
+.ministry-card {
+    background: #E8F5E9; border: 1px solid #A5D6A7; border-radius: 8px;
+    padding: 10px 14px; margin: 6px 0;
+}
+
+/* ═════════════════════════════════════════════
+   LAYOUT DESIGN SYSTEM  (no sidebar — all inline)
+   ═════════════════════════════════════════════ */
+:root {
+    --ds-surface: #FFFFFF;
+    --ds-bg-subtle: #F8F9FC;
+    --ds-border: #E2E5EF;
+    --ds-border-subtle: #ECEEF5;
+    --ds-primary: #1A237E;
+    --ds-primary-light: #E8EAF6;
+    --ds-primary-medium: #C5CAE9;
+    --ds-text: #1E1E2D;
+    --ds-text-muted: #6B7294;
+    --ds-radius: 10px;
+    --ds-radius-sm: 6px;
+    --ds-shadow: 0 1px 3px rgba(26,35,126,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --ds-shadow-hover: 0 4px 12px rgba(26,35,126,0.10);
+    --ds-transition: all 0.15s ease;
+}
+
+/* ── Hide sidebar toggle (not used) ── */
+section[data-testid="stSidebar"] { display: none !important; }
+button[data-testid="stSidebarCollapsedControl"] { display: none !important; }
+
+/* ── Top bar ── */
+.top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(135deg, #1A237E 0%, #283593 100%);
+    border-radius: 14px; padding: 14px 24px;
+    box-shadow: 0 4px 20px rgba(26,35,126,0.18);
+    margin-bottom: 10px; gap: 16px; flex-wrap: wrap;
+    color: #fff;
+}
+.top-bar-user {
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.top-bar-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    border: 2px solid rgba(255,255,255,0.35);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 1rem; flex-shrink: 0;
+}
+.top-bar-name { font-weight: 700; font-size: 0.88rem; color: #fff; }
+.top-bar-email { font-size: 0.72rem; color: rgba(255,255,255,0.7); }
+.top-bar-role {
+    font-size: 0.62rem; font-weight: 700; padding: 2px 10px;
+    border-radius: 10px; display: inline-block; margin-top: 2px;
+}
+.top-bar-role.director { background: rgba(255,255,255,0.2); color: #fff; }
+.top-bar-role.teacher  { background: rgba(255,255,255,0.15); color: #C8E6C9; }
+.top-bar-title {
+    text-align: center; flex: 1;
+}
+.top-bar-title h2 {
+    font-weight: 900; font-size: 1.5rem; color: #fff;
+    margin: 0; line-height: 1.15; letter-spacing: 0.01em;
+}
+.top-bar-title p {
+    font-size: 0.82rem; color: rgba(255,255,255,0.65);
+    margin: 2px 0 0; font-weight: 400;
+}
+
+/* ── Controls row (class + date) ── */
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .ctrl-row-marker) {
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius);
+    padding: 10px 18px 6px;
+    box-shadow: var(--ds-shadow);
+    margin-bottom: 8px;
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .ctrl-row-marker) label {
+    font-size: 0.78rem; font-weight: 600; color: var(--ds-text-muted);
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .ctrl-row-marker) .stSelectbox > div > div {
+    border-radius: 8px; border-color: var(--ds-border);
+    font-weight: 600; font-size: 0.92rem;
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .ctrl-row-marker) .stDateInput > div > div > input {
+    border-radius: 8px; font-weight: 500; font-size: 0.88rem;
+}
+.ctrl-row-marker { display: none; }
+
+/* ── Export toolbar ── */
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .export-bar-marker) {
+    background: var(--ds-bg-subtle);
+    border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius);
+    padding: 8px 14px 4px;
+    margin-bottom: 8px;
+}
+div[data-testid="stVerticalBlock"]:has(.export-bar-marker) .stDownloadButton > button,
+div[data-testid="stVerticalBlock"]:has(.export-bar-marker) .stButton > button {
+    font-size: 0.78rem !important; padding: 6px 14px !important;
+    border-radius: 8px !important; font-weight: 600 !important;
+}
+div[data-testid="stVerticalBlock"]:has(.export-bar-marker) div[data-testid="stPopover"] button {
+    font-size: 0.78rem !important; padding: 6px 14px !important;
+    height: auto !important; min-height: 0 !important;
+    line-height: normal !important; border-radius: 8px !important;
+    background: var(--ds-surface) !important; border: 1px solid var(--ds-border) !important;
+    color: var(--ds-text) !important; font-weight: 600 !important;
+}
+
+/* ── Tabs ── */
+div[data-testid="stTabs"] button[data-baseweb="tab"] {
+    font-family: 'Heebo', sans-serif;
+    font-weight: 600; font-size: 0.88rem;
+    padding: 8px 22px;
+    color: var(--ds-text-muted);
+    border-bottom: 3px solid transparent;
+    transition: var(--ds-transition);
+}
+div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+    color: var(--ds-primary);
+    border-bottom-color: var(--ds-primary);
+}
+div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
+    color: var(--ds-primary);
+}
+
+/* ── Section headers inside tabs ── */
+.sb-section-hdr {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.9rem; font-weight: 700; color: var(--ds-primary);
+    letter-spacing: 0.02em; padding: 0 0 8px; margin: 18px 0 12px;
+    border-bottom: 2px solid var(--ds-primary-light);
+}
+.sb-section-hdr .sb-icon { font-size: 1.05rem; line-height: 1; }
+
+/* ── Admin expanders (card-style) ── */
+.admin-panel details[data-testid="stExpander"] {
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius) !important;
+    box-shadow: var(--ds-shadow);
+    margin-bottom: 8px; overflow: hidden;
+}
+.admin-panel details[data-testid="stExpander"] summary {
+    font-weight: 600; font-size: 0.88rem;
+    color: var(--ds-text); padding: 12px 16px;
+}
+
+/* ── Staff cards ── */
+.staff-card {
+    background: var(--ds-surface); border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius); padding: 10px 14px;
+    margin-bottom: 6px; box-shadow: var(--ds-shadow);
+    transition: var(--ds-transition);
+}
+.staff-card:hover {
+    border-color: var(--ds-primary-medium);
+    box-shadow: var(--ds-shadow-hover);
+}
+.staff-email {
+    font-weight: 600; font-size: 0.88rem; color: var(--ds-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.staff-meta { font-size: 0.78rem; color: var(--ds-text-muted); margin-top: 3px; }
+.class-chip {
+    display: inline-block; background: var(--ds-primary-light);
+    color: var(--ds-primary); font-size: 0.72rem; font-weight: 600;
+    padding: 2px 10px; border-radius: 8px; margin: 2px 0 2px 4px;
+}
+.staff-empty {
+    text-align: center; padding: 24px 10px;
+    color: var(--ds-text-muted); font-size: 0.88rem;
+    background: var(--ds-bg-subtle); border: 1px dashed var(--ds-border);
+    border-radius: var(--ds-radius);
+}
+
+/* ── Export area ── */
+.export-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px; margin-top: 12px;
+}
+.sb-export-link {
+    display: block; text-align: center; padding: 12px;
+    border-radius: var(--ds-radius-sm); text-decoration: none;
+    font-weight: 600; font-size: 0.9rem;
+    transition: var(--ds-transition); box-shadow: var(--ds-shadow);
+}
+.sb-export-link:hover {
+    box-shadow: var(--ds-shadow-hover); transform: translateY(-1px);
+}
+
+/* ── Nav button bar ── */
+.nav-bar {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    justify-content: center; margin: 14px 0 10px;
+    padding: 8px 12px;
+    background: var(--ds-bg-subtle);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius);
+}
+.nav-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 18px; border-radius: 8px;
+    font-family: 'Heebo', sans-serif; font-weight: 600; font-size: 0.88rem;
+    border: 1.5px solid var(--ds-border); background: var(--ds-surface);
+    color: var(--ds-text-muted); cursor: pointer;
+    transition: var(--ds-transition); text-decoration: none;
+    box-shadow: var(--ds-shadow);
+}
+.nav-btn:hover {
+    border-color: var(--ds-primary-medium);
+    color: var(--ds-primary); background: var(--ds-primary-light);
+    box-shadow: var(--ds-shadow-hover); transform: translateY(-1px);
+}
+.nav-btn.active {
+    background: var(--ds-primary); color: #fff;
+    border-color: var(--ds-primary); box-shadow: var(--ds-shadow-hover);
+}
+.nav-btn .nav-icon { font-size: 1.1rem; line-height: 1; }
+</style>"""
 
 
 # ===================================================================
@@ -206,7 +510,6 @@ def generate_new_year(start_year: int) -> dict:
         })
         current += timedelta(days=7)
 
-    # Hebrew year label derived from start_year
     heb_year_num = start_year + 3761
     heb_letters = {
         5784: 'תשפ"ד', 5785: 'תשפ"ה', 5786: 'תשפ"ו', 5787: 'תשפ"ז',
@@ -221,7 +524,6 @@ def generate_new_year(start_year: int) -> dict:
         "parashat_hashavua": {},
     }
 
-    # Auto-fill holidays from Firestore
     for yr_key in [str(start_year), str(start_year + 1)]:
         holidays_data = get_holidays(yr_key)
         if not holidays_data:
@@ -258,7 +560,6 @@ def generate_new_year(start_year: int) -> dict:
                         })
                 d += timedelta(days=1)
 
-    # Auto-fill Parashat HaShavua from Hebcal
     try:
         parasha = fetch_parasha_from_api(start_year, start_year + 1)
         new_data["parashat_hashavua"] = parasha
@@ -503,24 +804,27 @@ def _build_schedule_html(data: dict, cls: str, filtered_weeks: list) -> str:
 
 
 def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
-    """Render the schedule as a high-resolution PNG image using Playwright (headless Chromium).
-
-    Auto-installs Chromium on first run (needed for Streamlit Cloud).
-    Falls back to returning the raw HTML bytes if Playwright is not available.
-    """
+    """Render the schedule as a high-resolution PNG image using Playwright."""
     full_html = _build_schedule_html(data, cls, filtered_weeks)
 
     try:
-        from playwright.sync_api import sync_playwright
+        import asyncio
         import subprocess
+        import sys
 
-        # Auto-install Chromium if not yet installed (first run on Streamlit Cloud)
+        # Windows requires ProactorEventLoop for subprocess support.
+        # Streamlit's event loop doesn't set this, so Playwright crashes
+        # with NotImplementedError on asyncio.create_subprocess_exec.
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+        from playwright.sync_api import sync_playwright
+
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
                 browser.close()
         except Exception:
-            # Chromium not installed yet — install it now
             subprocess.run(
                 ["playwright", "install", "chromium"],
                 check=True,
@@ -532,17 +836,14 @@ def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(
                 viewport={"width": 1200, "height": 800},
-                device_scale_factor=2,  # 2x resolution for sharp text
+                device_scale_factor=2,
             )
             page.set_content(full_html, wait_until="networkidle")
-            # Wait for Google Fonts to load
             page.wait_for_timeout(1500)
-            # Screenshot the full page content
             png_bytes = page.screenshot(full_page=True, type="png")
             browser.close()
         return png_bytes
     except Exception:
-        # Fallback: return HTML for manual download
         return full_html.encode("utf-8")
 
 
@@ -573,67 +874,14 @@ def build_whatsapp_text(data: dict, cls: str, filtered_weeks: list) -> str:
 
 
 # ===================================================================
-# CSS
-# ===================================================================
-
-APP_CSS = """<style>
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap');
-html, body, .stApp {
-    direction: rtl;
-    font-family: 'Heebo', sans-serif;
-}
-.block-container { padding-top: 0.5rem; max-width: 98%; }
-.cal-hdr {
-    background: linear-gradient(135deg, #1A237E, #283593);
-    color: #fff; font-weight: 700; font-size: 0.82em;
-    text-align: center; padding: 10px 4px; border-radius: 8px 8px 0 0;
-}
-.legend-row {
-    display: flex; flex-wrap: wrap; gap: 6px;
-    justify-content: center; margin: 8px 0 14px;
-}
-.legend-chip {
-    padding: 4px 14px; border-radius: 20px;
-    font-size: 0.78em; font-weight: 500;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-}
-.cal-parasha {
-    background: #FFF8E1; color: #F57F17; font-weight: 700;
-    padding: 2px 7px; border-radius: 10px; font-size: 0.72em;
-}
-.stColumn > div { gap: 2px; }
-div[data-testid="stPopover"] button {
-    font-size: 0.75em !important; padding: 0 4px !important;
-    min-height: 0 !important; height: 20px !important;
-    line-height: 20px !important; border-radius: 4px !important;
-    background: #E8EAF6 !important; border: 1px solid #C5CAE9 !important;
-    color: #3949AB !important; cursor: pointer !important;
-    width: 100% !important;
-}
-div[data-testid="stPopover"] button:hover { background: #C5CAE9 !important; }
-.ministry-card {
-    background: #E8F5E9; border: 1px solid #A5D6A7; border-radius: 8px;
-    padding: 10px 14px; margin: 6px 0;
-}
-.payment-card {
-    background: #FFF3E0; border: 1px solid #FFE0B2; border-radius: 8px;
-    padding: 10px 14px; margin: 6px 0;
-}
-</style>"""
-
-
-# ===================================================================
 # PAGES
 # ===================================================================
 
 def page_create_school(auth_info: dict):
     """Page shown when a director has no school yet - create one."""
     st.markdown(
-        '<h2 style="text-align:center;color:#1A237E;">יצירת מוסד חדש</h2>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<p style="text-align:center;color:#5C6BC0;">צור את מוסד הלימודים שלך כדי להתחיל</p>',
+        '<div class="app-title"><h1>יצירת מוסד חדש</h1>'
+        '<p>צור את מוסד הלימודים שלך כדי להתחיל</p></div>',
         unsafe_allow_html=True,
     )
     with st.form("create_school_form"):
@@ -653,7 +901,6 @@ def page_create_school(auth_info: dict):
                 classes = ["יא 1", "יא 2", "יא 3"]
             try:
                 create_school(school_id.strip(), auth_info["email"], school_name.strip(), classes)
-                # Generate initial schedule
                 current_year = datetime.now().year
                 month_now = datetime.now().month
                 start_year = current_year if month_now >= 8 else current_year - 1
@@ -666,133 +913,328 @@ def page_create_school(auth_info: dict):
                 st.error(f"שגיאה: {ex}")
 
 
+def _staff_card_html(email: str, role: str, classes: list[str], is_self: bool) -> str:
+    """Render a single staff member as an HTML card."""
+    role_label = "מנהל" if role == "director" else "מורה"
+    chips = "".join(f'<span class="class-chip">{c}</span>' for c in classes)
+    self_tag = ' <span style="font-size:0.65rem;color:#9E9E9E;">(את/ה)</span>' if is_self else ""
+    return (
+        f'<div class="staff-card">'
+        f'  <div class="staff-email">{email}{self_tag}</div>'
+        f'  <div class="staff-meta">{role_label} &nbsp;|&nbsp; {chips if chips else "ללא כיתות"}</div>'
+        f'</div>'
+    )
+
+
 def page_manage_staff(auth_info: dict):
-    """Director page: manage teachers and their class permissions."""
+    """Director page: manage teachers and their class permissions.
+
+    Features: card display, class chips, search filter, inline edit,
+    email validation, duplicate & self-delete protection.
+    """
     school_id = auth_info["school_id"]
-    st.markdown("### ניהול צוות")
+    my_email = (auth_info.get("email") or "").lower()
+    available_classes = auth_info["allowed_classes"]
 
-    # Current permissions
     perms = get_permissions(school_id)
-    if perms:
-        st.markdown("**צוות קיים:**")
-        for email, perm in perms.items():
-            if email == auth_info["email"]:
-                continue  # Don't show self
-            role = perm.get("role", "teacher")
-            classes = ", ".join(perm.get("allowed_classes", []))
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.markdown(f"**{email}** ({role}) - כיתות: {classes}")
-            with col2:
-                if st.button("הסר", key=f"remove_{email}"):
-                    remove_teacher_permission(school_id, email)
-                    st.toast(f"{email} הוסר", icon="✅")
-                    st.rerun()
+    # Build list excluding self
+    staff_list = [
+        (email, perm) for email, perm in (perms or {}).items()
+        if email.lower() != my_email
+    ]
+    staff_count = len(staff_list)
 
+    # ── Search filter ──
+    search_q = st.text_input(
+        "חיפוש לפי אימייל", key="staff_search",
+        placeholder="הקלד לחיפוש...",
+    )
+    if search_q.strip():
+        q = search_q.strip().lower()
+        staff_list = [(e, p) for e, p in staff_list if q in e.lower()]
+
+    # ── Staff list ──
+    if not staff_list and not search_q.strip():
+        st.markdown(
+            '<div class="staff-empty">אין מורים רשומים עדיין</div>',
+            unsafe_allow_html=True,
+        )
+    elif not staff_list and search_q.strip():
+        st.markdown(
+            '<div class="staff-empty">לא נמצאו תוצאות</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        for email, perm in staff_list:
+            role = perm.get("role", "teacher")
+            classes = perm.get("allowed_classes", [])
+
+            st.markdown(
+                _staff_card_html(email, role, classes, is_self=False),
+                unsafe_allow_html=True,
+            )
+
+            # Action row: Edit / Remove
+            act_col1, act_col2 = st.columns(2)
+            with act_col1:
+                edit_key = f"edit_toggle_{email}"
+                if st.button("עריכה", key=f"edit_btn_{email}", use_container_width=True):
+                    st.session_state[edit_key] = not st.session_state.get(edit_key, False)
+
+            with act_col2:
+                if role == "director":
+                    st.button("הסר", key=f"rm_{email}", disabled=True,
+                              use_container_width=True, help="לא ניתן להסיר מנהל")
+                else:
+                    if st.button("הסר", key=f"rm_{email}", use_container_width=True):
+                        remove_teacher_permission(school_id, email)
+                        st.toast(f"{email} הוסר מהצוות", icon="✅")
+                        st.rerun()
+
+            # Inline edit panel
+            if st.session_state.get(f"edit_toggle_{email}", False):
+                new_classes = st.multiselect(
+                    "עדכן כיתות",
+                    available_classes,
+                    default=[c for c in classes if c in available_classes],
+                    key=f"edit_classes_{email}",
+                )
+                if st.button("שמור שינויים", key=f"save_edit_{email}",
+                             type="primary", use_container_width=True):
+                    if new_classes:
+                        set_teacher_permission(school_id, email, new_classes)
+                        st.session_state[f"edit_toggle_{email}"] = False
+                        st.toast(f"כיתות עודכנו עבור {email}", icon="✅")
+                        st.rerun()
+                    else:
+                        st.warning("יש לבחור לפחות כיתה אחת")
+
+    # ── Add new teacher ──
     st.markdown("---")
-    st.markdown("**הוספת מורה חדש:**")
+    st.markdown(
+        '<div class="sb-section-hdr">'
+        '<span class="sb-icon">&#10133;</span> הוספת מורה</div>',
+        unsafe_allow_html=True,
+    )
     with st.form("add_teacher_form"):
-        teacher_email = st.text_input("אימייל המורה", placeholder="teacher@school.co.il")
-        available_classes = auth_info["allowed_classes"]
+        teacher_email = st.text_input("אימייל", placeholder="teacher@school.co.il")
         selected_classes = st.multiselect("כיתות מורשות", available_classes)
         if st.form_submit_button("הוסף מורה", type="primary"):
-            if teacher_email.strip() and selected_classes:
-                set_teacher_permission(school_id, teacher_email.strip(), selected_classes)
-                st.toast(f"{teacher_email} נוסף בהצלחה!", icon="✅")
+            email_clean = teacher_email.strip().lower()
+            # Validations
+            if not email_clean:
+                st.warning("יש להזין אימייל")
+            elif not _is_valid_email(email_clean):
+                st.error("כתובת אימייל לא תקינה")
+            elif not selected_classes:
+                st.warning("יש לבחור לפחות כיתה אחת")
+            elif email_clean == my_email:
+                st.error("לא ניתן להוסיף את עצמך")
+            elif perms and email_clean in perms:
+                st.warning(f"{email_clean} כבר קיים בצוות — ערוך כיתות דרך כפתור 'עריכה'")
+            else:
+                set_teacher_permission(school_id, email_clean, selected_classes)
+                st.toast(f"{email_clean} נוסף בהצלחה!", icon="✅")
+                st.rerun()
+
+    if staff_count > 0:
+        st.caption(f"{staff_count} חברי צוות רשומים")
+
+
+# ===================================================================
+# SIDEBAR SECTIONS
+# ===================================================================
+
+def _email_initial(email: str) -> str:
+    """Extract first Hebrew/Latin letter for avatar."""
+    name = email.split("@")[0] if "@" in email else email
+    return name[0].upper() if name else "?"
+
+
+def _is_valid_email(email: str) -> bool:
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()))
+
+
+def _top_bar_html(auth_info: dict) -> str:
+    """Build the HTML for the top-bar user badge (right-aligned in RTL)."""
+    name = auth_info.get("name", "")
+    email = auth_info.get("email", "")
+    initial = _email_initial(name or email) if email else "?"
+    role = auth_info.get("role", "")
+    role_label = "מנהל" if role == "director" else "מורה" if role == "teacher" else "צופה"
+    role_cls = "director" if role == "director" else "teacher"
+    return (
+        f'<div class="top-bar-user">'
+        f'  <div class="top-bar-avatar">{initial}</div>'
+        f'  <div>'
+        f'    <div class="top-bar-name">{name}</div>'
+        f'    <div class="top-bar-email">{email}</div>'
+        f'    <span class="top-bar-role {role_cls}">{role_label}</span>'
+        f'  </div>'
+        f'</div>'
+    )
+
+
+def render_admin_tab(data: dict, cls: str, school_id: str, auth_info: dict):
+    """Full admin tab — expanders inside a styled panel."""
+    c1, c2 = st.columns(2)
+
+    with c1:
+        with st.container():
+            st.markdown(
+                '<div class="sb-section-hdr">'
+                '<span class="sb-icon">&#9881;</span> ניהול לוח</div>',
+                unsafe_allow_html=True,
+            )
+
+            with st.expander("&#128218;  הוספת כיתה"):
+                nc = st.text_input("שם כיתה חדשה", key="nc", placeholder="יא 4")
+                if st.button("הוסף", key="add_class_btn") and nc.strip() and nc.strip() not in data.get("classes", []):
+                    add_class_to_school(school_id, nc.strip())
+                    data["classes"].append(nc.strip())
+                    save_schedule(school_id, data)
+                    st.rerun()
+
+            with st.expander("&#128197;  הוספת אירוע חדש"):
+                _sidebar_add_event_form(data, cls, school_id, auth_info)
+
+            with st.expander("&#127979;  סנכרון משרד החינוך"):
+                _sidebar_ministry_tools(data, cls, school_id)
+
+            with st.expander("&#127796;  ייבוא חופשות וחגים"):
+                _sidebar_holidays_import(data, school_id)
+
+            with st.expander("&#128260;  מעבר לשנה חדשה"):
+                _sidebar_year_rollover(data, cls, school_id)
+
+            with st.expander("&#128279;  קישור שיתוף להורים"):
+                share_class = st.selectbox("כיתה לשיתוף", data.get("classes", []), key="share_class_select")
+                detected_url = _get_base_url()
+                share_url = (
+                    f"{detected_url}?school_id={urllib.parse.quote(school_id)}"
+                    f"&class={urllib.parse.quote(share_class)}&mode=view"
+                )
+                st.code(share_url, language=None)
+                st.caption("שלח להורים — צפייה ללא התחברות")
+
+    with c2:
+        st.markdown(
+            '<div class="sb-section-hdr">'
+            '<span class="sb-icon">&#128101;</span> ניהול צוות</div>',
+            unsafe_allow_html=True,
+        )
+        page_manage_staff(auth_info)
+
+
+def _sidebar_add_event_form(data: dict, cls: str, school_id: str, auth_info: dict):
+    """Quick form to add an event from the sidebar."""
+    event_date = st.date_input("תאריך", key="sidebar_event_date")
+    event_text = st.text_input("שם האירוע", key="sidebar_event_text", placeholder="שם...")
+    event_type = st.selectbox(
+        "סוג",
+        list(STYLES.keys()),
+        format_func=lambda x: STYLES[x]["label"],
+        key="sidebar_event_type",
+    )
+    event_cls = st.selectbox(
+        "כיתה",
+        auth_info["allowed_classes"] + ["all"],
+        key="sidebar_event_cls",
+    )
+    if st.button("הוסף אירוע", key="sidebar_add_event_btn", type="primary", use_container_width=True):
+        if event_text.strip():
+            target = datetime.combine(event_date, datetime.min.time())
+            loc = date_to_week_day(data["weeks"], target)
+            if loc:
+                wi, dk = loc
+                data["weeks"][wi]["days"].setdefault(dk, []).append({
+                    "text": event_text.strip(), "type": event_type, "class": event_cls,
+                })
+                save_schedule(school_id, data)
+                st.toast("אירוע נוסף!", icon="✅")
                 st.rerun()
             else:
-                st.warning("יש למלא אימייל ולבחור כיתות")
+                st.warning("התאריך לא נמצא בלוח")
 
 
-def sidebar_ministry_tools(data: dict, cls: str, school_id: str):
-    """Sidebar section: Ministry of Education import + sync tools."""
-    st.markdown("---")
-    st.markdown("### ייבוא ממאגר משרד החינוך")
+def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
+    """Ministry of Education import + sync tools."""
     meta = get_ministry_meta()
     moed_info = meta.get("moed", "")
     exam_count = meta.get("count", 0)
-    st.caption(f"{moed_info} | {exam_count} בחינות")
+    if moed_info:
+        st.caption(f"{moed_info} | {exam_count} בחינות")
 
-    if st.button("רענן ממשרד החינוך", key="refresh_ministry"):
+    if st.button("רענן ממשרד החינוך", key="refresh_ministry", use_container_width=True):
         try:
-            with st.spinner("מוריד נתונים ממשרד החינוך..."):
+            with st.spinner("מוריד נתונים..."):
                 count = refresh_ministry_db_from_web()
-            st.toast(f"עודכן! {count} בחינות יובאו", icon="✅")
+            st.toast(f"עודכן! {count} בחינות", icon="✅")
             st.rerun()
         except Exception as ex:
             st.error(f"שגיאה: {ex}")
 
-    # Search
     search_query = st.text_input(
-        "חיפוש לפי מקצוע או סמל",
+        "חיפוש לפי מקצוע / סמל",
         key="ministry_text_search",
-        placeholder="למשל: מתמטיקה, אנגלית, 899271...",
+        placeholder="מתמטיקה, 899271...",
     )
     if search_query.strip():
         results = search_ministry_exams(search_query)
         if results:
-            st.caption(f"נמצאו {len(results)} תוצאות")
+            st.caption(f"{len(results)} תוצאות")
             for exam in results:
                 st.markdown(exam_card_html(exam), unsafe_allow_html=True)
                 if st.button(f"ייבא {exam['name'][:30]}", key=f"import_search_{exam['code']}"):
                     success, msg = import_exam_to_schedule(data, exam, cls)
                     if success:
                         save_schedule(school_id, data)
-                        st.toast(msg if msg else f"יובא בהצלחה: {exam['name']}", icon="✅" if not msg else "⚠️")
+                        st.toast(msg if msg else f"יובא: {exam['name']}", icon="✅" if not msg else "⚠️")
                         st.rerun()
                     else:
                         st.info(msg)
         else:
             st.caption("לא נמצאו תוצאות")
 
-    # Dropdown list
     all_exams = get_ministry_exams()
     all_exams = [e for e in all_exams if e.get("code") != "_metadata"]
     if all_exams:
-        st.markdown("**או בחר מהרשימה:**")
         exam_options = ["בחר מקצוע..."] + [
             f"{ex['code']} - {ex['name']}" for ex in all_exams
         ]
-        selected_option = st.selectbox("שם מקצוע", exam_options, key="ministry_select", label_visibility="collapsed")
+        selected_option = st.selectbox("בחר מהרשימה", exam_options, key="ministry_select", label_visibility="collapsed")
         if selected_option != "בחר מקצוע...":
             sel_code = selected_option.split(" - ")[0].strip()
             exam = get_ministry_exam(sel_code)
             if exam:
                 st.markdown(exam_card_html(exam), unsafe_allow_html=True)
-                if st.button("ייבא ללוח שלי", key=f"import_{exam['code']}"):
+                if st.button("ייבא ללוח", key=f"import_{exam['code']}", use_container_width=True):
                     success, msg = import_exam_to_schedule(data, exam, cls)
                     if success:
                         save_schedule(school_id, data)
-                        st.toast(msg if msg else f"יובא בהצלחה: {exam['name']}", icon="✅" if not msg else "⚠️")
+                        st.toast(msg if msg else f"יובא: {exam['name']}", icon="✅" if not msg else "⚠️")
                         st.rerun()
                     else:
                         st.info(msg)
 
-    # Resync
     st.markdown("---")
-    st.markdown("### סנכרון תאריכי בגרות")
-    st.caption("בדוק עדכוני תאריכים מול מאגר משרד החינוך")
-    if st.button("סנכרן תאריכי בגרות", type="primary", use_container_width=True):
+    st.caption("בדיקת עדכוני תאריכים מול משרד החינוך")
+    if st.button("סנכרן תאריכי בגרות", key="resync_btn", use_container_width=True):
         changes = resync_dates_with_ministry(data, cls)
         if not changes:
-            st.success("כל התאריכים מעודכנים!")
+            st.success("הכל מעודכן!")
         else:
             save_schedule(school_id, data)
-            st.markdown("**שינויים שבוצעו:**")
             for ch in changes:
-                st.markdown(
-                    f"- **{ch['name']}** ({ch['code']}): {ch['old_date']} → {ch['new_date']}"
-                )
+                st.markdown(f"- **{ch['name']}** ({ch['code']}): {ch['old_date']} -> {ch['new_date']}")
                 if ch["conflict"]:
-                    st.error(f"התנגשות: {ch['conflict']}")
+                    st.error(ch["conflict"])
             st.rerun()
 
 
-def sidebar_holidays_import(data: dict, school_id: str):
-    """Sidebar section: import holidays and vacations."""
-    st.markdown("---")
-    st.markdown("### ייבוא חופשות וחגים")
-    st.caption("ייבא חגים וחופשות ללוח ממאגר החגים")
+def _sidebar_holidays_import(data: dict, school_id: str):
+    """Import holidays and vacations."""
+    st.caption("ייבא חגים וחופשות ממאגר החגים")
     if st.button("ייבא חופשות וחגים", key="import_holidays_btn", use_container_width=True):
         added_count = 0
         year_keys = set()
@@ -849,22 +1291,20 @@ def sidebar_holidays_import(data: dict, school_id: str):
             st.toast(f"יובאו {added_count} אירועים!", icon="✅")
             st.rerun()
         else:
-            st.info("כל החגים והחופשות כבר קיימים בלוח")
+            st.info("הכל כבר קיים בלוח")
 
 
-def sidebar_year_rollover(data: dict, cls: str, school_id: str):
-    """Sidebar section: generate a new academic year."""
-    st.markdown("---")
-    st.markdown("### מעבר לשנה חדשה")
-    st.caption("ייצר לוח שנה חדש עם חגים, חופשות ופרשת השבוע")
+def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
+    """Generate a new academic year."""
+    st.caption("ייצר לוח שנה חדש עם חגים וחופשות")
     current_year = datetime.now().year
     new_year_start = st.number_input(
         "שנת התחלה (לועזי)", min_value=2024, max_value=2040,
         value=current_year, key="new_year_input",
     )
-    import_bagrut = st.checkbox("ייבא בגרויות אוטומטית", value=True, key="import_bagrut_check")
-    if st.button("צור שנה חדשה", key="gen_new_year"):
-        with st.spinner("יוצר לוח שנה ומייבא נתונים..."):
+    import_bagrut = st.checkbox("ייבא בגרויות", value=True, key="import_bagrut_check")
+    if st.button("צור שנה חדשה", key="gen_new_year", use_container_width=True):
+        with st.spinner("יוצר לוח שנה..."):
             new_data = generate_new_year(int(new_year_start))
             new_data["classes"] = data["classes"]
 
@@ -904,117 +1344,140 @@ def sidebar_year_rollover(data: dict, cls: str, school_id: str):
         st.rerun()
 
 
-def sidebar_payments(data: dict, cls: str, school_id: str, auth_info: dict):
-    """Sidebar section: payment management for directors.
-
-    Model: Schools pay an annual subscription to use the platform.
-    Directors can also create charges visible to parents (e.g. field trips).
-    """
-    st.markdown("---")
-    st.markdown("### ניהול תשלומים")
-
-    # --- School subscription status ---
-    from db_manager import get_school
-    school = get_school(school_id)
-    sub_status = school.get("subscription_status", "trial") if school else "trial"
-    sub_expiry = school.get("subscription_expiry", "")
-    status_labels = {"trial": "ניסיון", "active": "פעיל", "expired": "פג תוקף"}
+def render_export_tab(data: dict, cls: str, filtered_weeks: list):
+    """Export & Share tab — horizontal grid layout."""
     st.markdown(
-        f'**מנוי מוסד:** {status_labels.get(sub_status, sub_status)}'
-        f'{" | עד " + sub_expiry if sub_expiry else ""}'
+        '<div class="sb-section-hdr">'
+        '<span class="sb-icon">&#128229;</span> ייצוא ושיתוף</div>',
+        unsafe_allow_html=True,
     )
 
-    # --- Charges for students (visible to parents via public link) ---
-    st.markdown("---")
-    st.markdown("**חיובים לתלמידים:**")
-    payments = get_payments(school_id)
+    col_xl, col_wa, col_png = st.columns(3)
 
-    with st.expander("יצירת חיוב חדש לכיתה"):
-        charge_desc = st.text_input("תיאור החיוב", key="charge_desc", placeholder="למשל: מסע זהות")
-        charge_amount = st.number_input("סכום (₪)", min_value=0.0, step=10.0, key="charge_amount")
-        charge_class = st.selectbox("כיתה", data["classes"] + ["כולם"], key="charge_class")
-        charge_due = st.date_input("תאריך יעד לתשלום", key="charge_due")
-        if st.button("צור חיוב", key="create_charge"):
-            if charge_desc.strip() and charge_amount > 0:
-                add_payment(school_id, {
-                    "description": charge_desc.strip(),
-                    "amount": charge_amount,
-                    "class": charge_class,
-                    "due_date": charge_due.strftime("%Y-%m-%d"),
-                    "created_by": auth_info.get("email", ""),
-                })
-                st.toast("חיוב נוצר בהצלחה!", icon="✅")
-                st.rerun()
+    with col_xl:
+        st.download_button(
+            "&#128230;  הורד Excel",
+            data=to_excel(data, cls),
+            file_name=f"לוח_{cls}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.document",
+            use_container_width=True,
+        )
 
-    if payments:
-        for ch in payments:
-            target = ch.get("class", "כולם")
-            col1, col2 = st.columns([4, 1])
-            with col1:
-                st.markdown(
-                    f'<div class="payment-card">'
-                    f'<b>{ch["description"]}</b> - ₪{ch["amount"]}<br>'
-                    f'כיתה: {target} | יעד: {ch.get("due_date", "")}'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-            with col2:
-                if st.button("מחק", key=f"del_pay_{ch['id']}"):
-                    delete_payment(school_id, ch["id"])
-                    st.rerun()
+    with col_wa:
+        wa_text = build_whatsapp_text(data, cls, filtered_weeks)
+        wa_url = f"https://wa.me/?text={urllib.parse.quote(wa_text[:4000])}"
+        st.markdown(
+            f'<a href="{wa_url}" target="_blank" class="sb-export-link" '
+            f'style="background:#25D366;color:#fff;">'
+            f'&#128242;  שתף בווצאפ</a>',
+            unsafe_allow_html=True,
+        )
+
+    with col_png:
+        if "wa_png_cache_key" not in st.session_state:
+            st.session_state["wa_png_cache_key"] = None
+            st.session_state["wa_png_bytes"] = None
+
+        cache_key = f"{cls}_{data.get('year', '')}_{len(filtered_weeks)}"
+        if st.session_state["wa_png_cache_key"] != cache_key:
+            with st.spinner("יוצר תמונה..."):
+                png_result = schedule_to_png(data, cls, filtered_weeks)
+            st.session_state["wa_png_cache_key"] = cache_key
+            st.session_state["wa_png_bytes"] = png_result
+
+        png_image = st.session_state["wa_png_bytes"]
+        is_png = isinstance(png_image, bytes) and len(png_image) > 4 and png_image[:4] == b'\x89PNG'
+
+        if is_png:
+            st.download_button(
+                "&#128248;  הורד תמונה PNG",
+                data=png_image,
+                file_name=f"לוח_{cls}.png",
+                mime="image/png",
+                key="download_png_tab",
+                use_container_width=True,
+            )
+        elif png_image:
+            st.download_button(
+                "&#128248;  הורד תמונה (HTML)",
+                data=png_image,
+                file_name=f"לוח_{cls}.html",
+                mime="text/html",
+                key="download_html_tab",
+                use_container_width=True,
+            )
 
 
-def _get_base_url() -> str:
-    """Auto-detect the app's base URL from Streamlit context."""
-    try:
-        # Streamlit Cloud / hosted: use the session's browser URL
-        ctx = st.context
-        if hasattr(ctx, "headers"):
-            host = ctx.headers.get("Host", "")
-            scheme = ctx.headers.get("X-Forwarded-Proto", "https")
-            if host:
-                return f"{scheme}://{host}"
-    except Exception:
-        pass
-    return "http://localhost:8501"
+# ===================================================================
+# DATE RANGE FILTER HELPER
+# ===================================================================
+
+def _compute_default_date_range(data: dict):
+    """Return (start_date, end_date) = current month start .. end of month+2."""
+    today = datetime.now().date()
+    start = today.replace(day=1)
+    # End of current month + 2
+    month = today.month + 2
+    year = today.year
+    while month > 12:
+        month -= 12
+        year += 1
+    # Last day of target month
+    if month == 12:
+        end = datetime(year, 12, 31).date()
+    else:
+        end = (datetime(year, month + 1, 1) - timedelta(days=1)).date()
+
+    # Clamp to schedule range
+    if data["weeks"]:
+        try:
+            sched_start = datetime.strptime(data["weeks"][0]["start_date"], "%Y-%m-%d").date()
+            sched_end = datetime.strptime(data["weeks"][-1]["start_date"], "%Y-%m-%d").date() + timedelta(days=6)
+            start = max(start, sched_start)
+            end = min(end, sched_end)
+        except Exception:
+            pass
+    return start, end
 
 
-def sidebar_public_link(data: dict, school_id: str):
-    """Sidebar section: generate public sharing links."""
-    st.markdown("---")
-    st.markdown("### קישור שיתוף להורים")
-    st.caption("צור קישור ציבורי שהורים יכולים לצפות בו ללא סיסמה")
-    share_class = st.selectbox("כיתה לשיתוף", data["classes"], key="share_class_select")
-    detected_url = _get_base_url()
-    base_url = st.text_input("כתובת האפליקציה", value=detected_url, key="base_url_input")
-    share_url = f"{base_url}?school_id={urllib.parse.quote(school_id)}&class={urllib.parse.quote(share_class)}&mode=view"
-    st.code(share_url, language=None)
-    st.caption("שלח קישור זה להורים - הם יוכלו לראות את הלוח ללא התחברות")
+def _filter_weeks_by_range(data: dict, range_start, range_end):
+    """Return list of (index, week) tuples whose date span overlaps with [range_start, range_end]."""
+    filtered = []
+    for wi, wk in enumerate(data["weeks"]):
+        try:
+            sd = datetime.strptime(wk["start_date"], "%Y-%m-%d").date()
+            ed = sd + timedelta(days=6)
+            if ed >= range_start and sd <= range_end:
+                filtered.append((wi, wk))
+        except Exception:
+            filtered.append((wi, wk))
+    return filtered
 
 
 # ===================================================================
 # MAIN SCHEDULER VIEW
 # ===================================================================
 
-def render_scheduler(data: dict, cls: str, auth_info: dict):
+def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list):
     """Render the main visual schedule grid."""
     school_id = auth_info.get("school_id", "")
     is_director = auth_info["role"] == "director"
     is_teacher = auth_info["role"] == "teacher"
     can_edit = is_director or is_teacher
 
+    # ── Header ──
+    year_label = data.get("year", "")
     school_name = auth_info.get("school_name", "")
+
     st.markdown(
-        f'<h2 style="text-align:center;margin:0 0 2px;color:#1A237E;font-weight:900;">'
-        f'לוח מבחנים {data.get("year", "")} - {school_name}</h2>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f'<p style="text-align:center;margin:0 0 4px;color:#5C6BC0;font-size:0.9em;">{cls}</p>',
+        f'<div class="app-title">'
+        f'<h1>לוח מבחנים {year_label}</h1>'
+        f'<p>2025 - 2026 &nbsp;|&nbsp; {school_name} &nbsp;|&nbsp; {cls}</p>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
-    # Legend
+    # ── Legend ──
     lg = "".join(
         f'<span class="legend-chip" style="background:{s["bg"]};color:{s["fg"]};'
         f'font-weight:{"700" if s["bold"] else "400"};">{s["label"]}</span>'
@@ -1025,72 +1488,13 @@ def render_scheduler(data: dict, cls: str, auth_info: dict):
 
     pm = data.get("parashat_hashavua", {})
 
-    # Month filter
-    available_months = []
-    month_set = set()
-    for wk in data["weeks"]:
-        try:
-            sd = datetime.strptime(wk["start_date"], "%Y-%m-%d")
-            key = (sd.year, sd.month)
-            if key not in month_set:
-                month_set.add(key)
-                available_months.append(key)
-            ed = sd + timedelta(days=6)
-            key2 = (ed.year, ed.month)
-            if key2 not in month_set:
-                month_set.add(key2)
-                available_months.append(key2)
-        except Exception:
-            pass
-    available_months.sort()
-
-    month_options = ["כל השנה"] + [
-        f"{MONTH_NAMES_HEB[m]} {y}" for y, m in available_months
-    ]
-
-    fc1, fc2, fc3 = st.columns([1, 3, 1])
-    with fc1:
-        selected_month = st.selectbox("סינון לפי חודש", month_options, key="month_filter")
-    with fc3:
-        show_past_weeks = st.checkbox("הצג שבועות קודמים", value=False, key="show_past")
-
-    today = datetime.now().date()
-
-    if selected_month == "כל השנה":
-        filtered_weeks = list(enumerate(data["weeks"]))
-    else:
-        idx = month_options.index(selected_month) - 1
-        sel_year, sel_month = available_months[idx]
-        filtered_weeks = []
-        for wi, wk in enumerate(data["weeks"]):
-            try:
-                sd = datetime.strptime(wk["start_date"], "%Y-%m-%d")
-                ed = sd + timedelta(days=6)
-                if (sd.year == sel_year and sd.month == sel_month) or \
-                   (ed.year == sel_year and ed.month == sel_month):
-                    filtered_weeks.append((wi, wk))
-            except Exception:
-                filtered_weeks.append((wi, wk))
-
-    if not show_past_weeks:
-        current_and_future = []
-        for wi, wk in filtered_weeks:
-            try:
-                sd = datetime.strptime(wk["start_date"], "%Y-%m-%d")
-                ed = sd + timedelta(days=6)
-                if ed.date() >= today:
-                    current_and_future.append((wi, wk))
-            except Exception:
-                current_and_future.append((wi, wk))
-        filtered_weeks = current_and_future
-
-    # Header row
+    # ── Header row ──
     hcols = st.columns(7)
     for i, dn in enumerate(DAY_NAMES):
         with hcols[i]:
             st.markdown(f'<div class="cal-hdr">{dn}</div>', unsafe_allow_html=True)
 
-    # Week rows
+    # ── Week rows ──
     for wi, wk in filtered_weeks:
         parasha = pm.get(wk["start_date"], "")
         rcols = st.columns(7)
@@ -1138,61 +1542,22 @@ def render_scheduler(data: dict, cls: str, auth_info: dict):
                                 save_schedule(school_id, data)
                                 st.rerun()
 
-    # ==================================================================
-    # EXPORT SECTION
-    # ==================================================================
-    st.markdown("---")
-    st.markdown("### שיתוף וייצוא")
-    
-    # Pre-generate the PNG image for the download button
-    if "wa_png_cache_key" not in st.session_state:
-        st.session_state["wa_png_cache_key"] = None
-        st.session_state["wa_png_bytes"] = None
 
-    cache_key = f"{cls}_{data.get('year','')}_{len(filtered_weeks)}"
-    if st.session_state["wa_png_cache_key"] != cache_key:
-        with st.spinner("📸 יוצר תמונה..."):
-            png_result = schedule_to_png(data, cls, filtered_weeks)
-        st.session_state["wa_png_cache_key"] = cache_key
-        st.session_state["wa_png_bytes"] = png_result
+# ===================================================================
+# PUBLIC LINK HELPER
+# ===================================================================
 
-    png_image = st.session_state["wa_png_bytes"]
-    is_png = isinstance(png_image, bytes) and len(png_image) > 4 and png_image[:4] == b'\x89PNG'
-    
-    exp_col1, exp_col2 = st.columns(2)
-
-    with exp_col1:
-        st.download_button(
-            "📥 הורד אקסל",
-            data=to_excel(data, cls),
-            file_name=f"לוח_{cls}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.document",
-            use_container_width=True,
-        )
-
-    with exp_col2:
-        if is_png:
-            st.download_button(
-                "📸 הורד תמונה לווצאפ",
-                data=png_image,
-                file_name=f"לוח_{cls}.png",
-                mime="image/png",
-                key="download_png_direct",
-                use_container_width=True,
-                type="primary",
-            )
-        else:
-            st.download_button(
-                "📸 הורד תמונה (HTML)",
-                data=png_image if png_image else b"",
-                file_name=f"לוח_{cls}.html",
-                mime="text/html",
-                key="download_html_fallback",
-                use_container_width=True,
-                type="primary",
-            )
-
-
+def _get_base_url() -> str:
+    try:
+        ctx = st.context
+        if hasattr(ctx, "headers"):
+            host = ctx.headers.get("Host", "")
+            scheme = ctx.headers.get("X-Forwarded-Proto", "https")
+            if host:
+                return f"{scheme}://{host}"
+    except Exception:
+        pass
+    return "http://localhost:8501"
 
 
 # ===================================================================
@@ -1200,16 +1565,22 @@ def render_scheduler(data: dict, cls: str, auth_info: dict):
 # ===================================================================
 
 def main():
-    st.set_page_config(page_title="לוח מבחנים", layout="wide")
+    st.set_page_config(page_title="לוח מבחנים", layout="wide", initial_sidebar_state="collapsed")
     st.markdown(APP_CSS, unsafe_allow_html=True)
 
-    # ---- Authenticate ----
-    auth_info = authenticate()
+    # ── Authenticate ──
+    try:
+        auth_info = authenticate()
+    except Exception as e:
+        import traceback
+        st.error(f"Critical Auth Error: {e}")
+        st.text(traceback.format_exc())
+        return
 
     if not auth_info["authenticated"]:
         return
 
-    # ---- Public mode: skip sidebar, render read-only ----
+    # ── Public mode: read-only, no tabs ──
     if auth_info["is_public"]:
         school_id = auth_info["school_id"]
         if not school_id:
@@ -1221,66 +1592,219 @@ def main():
             return
         allowed = auth_info["allowed_classes"]
         cls = allowed[0] if allowed else (data["classes"][0] if data["classes"] else "יא 1")
-        render_scheduler(data, cls, auth_info)
+
+        default_start, default_end = _compute_default_date_range(data)
+        filtered_weeks = _filter_weeks_by_range(data, default_start, default_end)
+
+        render_scheduler(data, cls, auth_info, filtered_weeks)
         return
 
-    # ---- No school yet -> create school flow ----
+    # ── No school yet → create school flow ──
     if not auth_info["school_id"] and not auth_info["schools"]:
         page_create_school(auth_info)
         return
 
     if not auth_info["school_id"]:
-        st.info("בחר מוסד מהתפריט בצד")
+        st.info("בחר מוסד מהרשימה")
         return
 
-    # ---- Load schedule data ----
+    # ── Load schedule data ──
     school_id = auth_info["school_id"]
     data = get_schedule(school_id)
-
-    # ---- Sidebar ----
     is_director = auth_info["role"] == "director"
+    is_teacher = auth_info["role"] == "teacher"
     allowed_classes = auth_info["allowed_classes"]
 
-    with st.sidebar:
-        st.markdown("### הגדרות")
-        if allowed_classes:
-            cls = st.selectbox("כיתה", allowed_classes)
-        else:
-            cls = st.selectbox("כיתה", data.get("classes", ["יא 1"]))
+    # ──────────────────────────────────────────
+    # TOP BAR — user info + class selector + date range
+    # ──────────────────────────────────────────
+    year_label = data.get("year", "")
+    school_name = auth_info.get("school_name", "")
 
-        if is_director:
-            # Add class
-            nc = st.text_input("הוספת כיתה", key="nc")
-            if st.button("הוסף כיתה") and nc.strip() and nc.strip() not in data.get("classes", []):
-                add_class_to_school(school_id, nc.strip())
-                data["classes"].append(nc.strip())
-                save_schedule(school_id, data)
-                st.rerun()
+    user_html = _top_bar_html(auth_info)
+    title_html = (
+        f'<div class="top-bar-title">'
+        f'  <h2>לוח מבחנים {year_label}</h2>'
+        f'  <p>2025 - 2026 &nbsp;|&nbsp; {school_name}</p>'
+        f'</div>'
+    )
 
-            # Manage Staff page (in expander)
-            with st.expander("ניהול צוות"):
+    bar_col, logout_col = st.columns([6, 1])
+    with bar_col:
+        st.markdown(
+            f'<div class="top-bar">{user_html}{title_html}</div>',
+            unsafe_allow_html=True,
+        )
+    with logout_col:
+        st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
+        if st.button("התנתק", key="logout_btn", use_container_width=True):
+            for k in ("auth_email", "auth_name", "auth_token", "selected_school_id"):
+                st.session_state.pop(k, None)
+            st.rerun()
+
+    # ── Controls row: class + date range ──
+    with st.container():
+        st.markdown('<div class="ctrl-row-marker"></div>', unsafe_allow_html=True)
+        ctrl1, ctrl2 = st.columns([1, 3])
+        with ctrl1:
+            if allowed_classes:
+                cls = st.selectbox("כיתה", allowed_classes, key="class_select", label_visibility="collapsed")
+            else:
+                cls = st.selectbox("כיתה", data.get("classes", ["יא 1"]), key="class_select", label_visibility="collapsed")
+        with ctrl2:
+            default_start, default_end = _compute_default_date_range(data)
+            date_range = st.date_input(
+                "טווח תאריכים",
+                value=(default_start, default_end),
+                key="date_range_filter",
+                label_visibility="collapsed",
+            )
+
+    if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+        range_start, range_end = date_range
+    elif isinstance(date_range, (list, tuple)) and len(date_range) == 1:
+        range_start = date_range[0]
+        range_end = default_end
+    else:
+        range_start = default_start
+        range_end = default_end
+
+    filtered_weeks = _filter_weeks_by_range(data, range_start, range_end)
+
+    # ──────────────────────────────────────────
+    # LAYOUT: side buttons + main schedule
+    # ──────────────────────────────────────────
+    if "open_panel" not in st.session_state:
+        st.session_state["open_panel"] = None
+
+    # Build button definitions based on role
+    action_buttons = []
+    if is_director:
+        action_buttons += [
+            ("add_event", "➕", "הוספת אירוע"),
+            ("ministry", "🏫", "משרד החינוך"),
+            ("holidays", "🌴", "חופשות וחגים"),
+            ("new_year", "🔄", "שנה חדשה"),
+            ("add_class", "📚", "הוספת כיתה"),
+            ("staff", "👥", "ניהול צוות"),
+        ]
+
+    if action_buttons:
+        col_main, col_side = st.columns([4, 1])
+    else:
+        col_main = st.container()
+        col_side = None
+
+    # ── Side buttons column ──
+    if col_side is not None:
+        with col_side:
+            for key, icon, label in action_buttons:
+                is_open = st.session_state["open_panel"] == key
+                btn_type = "primary" if is_open else "secondary"
+                if st.button(f"{icon} {label}", key=f"nav_{key}", use_container_width=True, type=btn_type):
+                    st.session_state["open_panel"] = None if is_open else key
+
+            # ── Render open panel content inside the side column ──
+            panel = st.session_state["open_panel"]
+
+            if panel == "add_event" and is_director:
+                st.markdown("---")
+                st.markdown("##### ➕ הוספת אירוע")
+                _sidebar_add_event_form(data, cls, school_id, auth_info)
+
+            elif panel == "ministry" and is_director:
+                st.markdown("---")
+                st.markdown("##### 🏫 משרד החינוך")
+                _sidebar_ministry_tools(data, cls, school_id)
+
+            elif panel == "holidays" and is_director:
+                st.markdown("---")
+                st.markdown("##### 🌴 חופשות וחגים")
+                _sidebar_holidays_import(data, school_id)
+
+            elif panel == "new_year" and is_director:
+                st.markdown("---")
+                st.markdown("##### 🔄 שנה חדשה")
+                _sidebar_year_rollover(data, cls, school_id)
+
+            elif panel == "add_class" and is_director:
+                st.markdown("---")
+                st.markdown("##### 📚 הוספת כיתה")
+                nc = st.text_input("שם כיתה חדשה", key="nc", placeholder="יא 4")
+                if st.button("הוסף", key="add_class_btn", type="primary") and nc.strip() and nc.strip() not in data.get("classes", []):
+                    add_class_to_school(school_id, nc.strip())
+                    data["classes"].append(nc.strip())
+                    save_schedule(school_id, data)
+
+            elif panel == "staff" and is_director:
+                st.markdown("---")
+                st.markdown("##### 👥 ניהול צוות")
                 page_manage_staff(auth_info)
 
-            # Ministry tools
-            sidebar_ministry_tools(data, cls, school_id)
+    # ── Main column: export row + schedule ──
+    with col_main:
+        # ── Compact export toolbar above the table ──
+        if is_director or is_teacher:
+          with st.container():
+            st.markdown('<div class="export-bar-marker"></div>', unsafe_allow_html=True)
+            exp_c1, exp_c2, exp_c3 = st.columns([1, 1, 1])
 
-            # Holidays import
-            sidebar_holidays_import(data, school_id)
+            # 1) Copy share link (using popover with st.code for native copy)
+            with exp_c1:
+                with st.popover("🔗 העתק קישור", use_container_width=True):
+                    detected_url = _get_base_url()
+                    share_url = f"{detected_url}?school_id={urllib.parse.quote(school_id)}&class={urllib.parse.quote(cls)}&mode=view"
+                    st.caption("לחץ על הכפתור להעתקה:")
+                    st.code(share_url, language=None)
 
-            # Year rollover
-            sidebar_year_rollover(data, cls, school_id)
+            # 2) Download Excel
+            with exp_c2:
+                st.download_button(
+                    "📊 הורד Excel",
+                    data=to_excel(data, cls),
+                    file_name=f"לוח_{cls}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.document",
+                    use_container_width=True,
+                    key="top_download_excel",
+                )
 
-            # Public share link
-            sidebar_public_link(data, school_id)
+            # 3) Download Image
+            with exp_c3:
+                if "wa_png_cache_key" not in st.session_state:
+                    st.session_state["wa_png_cache_key"] = None
+                    st.session_state["wa_png_bytes"] = None
 
-            # Payments
-            sidebar_payments(data, cls, school_id, auth_info)
-        else:
-            st.markdown("---")
-            st.caption(f"תפקיד: {'מורה' if auth_info['role'] == 'teacher' else 'צופה'}")
+                cache_key = f"{cls}_{data.get('year', '')}_{len(filtered_weeks)}"
+                if st.session_state["wa_png_cache_key"] != cache_key:
+                    with st.spinner("📸 יוצר תמונה..."):
+                        png_result = schedule_to_png(data, cls, filtered_weeks)
+                    st.session_state["wa_png_cache_key"] = cache_key
+                    st.session_state["wa_png_bytes"] = png_result
 
-    # ---- Render the scheduler ----
-    render_scheduler(data, cls, auth_info)
+                png_image = st.session_state["wa_png_bytes"]
+                is_png = isinstance(png_image, bytes) and len(png_image) > 4 and png_image[:4] == b'\x89PNG'
+
+                if is_png:
+                    st.download_button(
+                        "📸 הורד תמונה",
+                        data=png_image,
+                        file_name=f"לוח_{cls}.png",
+                        mime="image/png",
+                        key="top_download_png",
+                        use_container_width=True,
+                    )
+                elif png_image:
+                    st.download_button(
+                        "📸 הורד תמונה (HTML)",
+                        data=png_image,
+                        file_name=f"לוח_{cls}.html",
+                        mime="text/html",
+                        key="top_download_html",
+                        use_container_width=True,
+                    )
+
+        # ── Schedule table ──
+        render_scheduler(data, cls, auth_info, filtered_weeks)
 
 
 if __name__ == "__main__":
