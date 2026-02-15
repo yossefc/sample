@@ -139,6 +139,26 @@ div[data-testid="stTabs"] .app-title { display: none; }
     border-radius: 0;
 }
 
+/* ── Cell buttons (clickable cells) ── */
+div[data-testid="stColumn"] div.stButton > button {
+    min-height: 72px;
+    white-space: pre-wrap;
+    text-align: center;
+    font-size: 0.78em;
+    line-height: 1.5;
+    border: 1px solid #DEE2E6;
+    border-radius: 6px;
+    background: #FFFFFF;
+    color: #1E1E2D;
+    padding: 4px 3px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+div[data-testid="stColumn"] div.stButton > button:hover {
+    background: #E8EAF6;
+    border-color: #1A237E;
+}
+
 /* ── Legend chips ── */
 .legend-row {
     display: flex; flex-wrap: wrap; gap: 6px;
@@ -1852,24 +1872,26 @@ def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list
         with hcols[i]:
             st.markdown(f'<div class="cal-hdr">{dn}</div>', unsafe_allow_html=True)
 
-    # ── Week rows: only lightweight buttons, no heavy popover widgets ──
+    # ── Week rows ──
     for wi, wk in filtered_weeks:
         parasha = pm.get(wk["start_date"], "")
         rcols = st.columns(7)
-        even = wi % 2 == 0
 
         for di, dk in enumerate(DAY_KEYS):
             with rcols[di]:
                 day_date = get_day_date(wk.get("start_date", ""), di)
                 evs = [e for e in wk["days"].get(dk, []) if e.get("class") in (cls, "all")]
-                chips = "".join(chip_html(e) for e in evs)
-                if dk == "shabbat" and parasha:
-                    chips += f'<span class="cal-parasha">{parasha}</span>'
-
-                st.markdown(cell_html(day_date, chips, even), unsafe_allow_html=True)
 
                 if can_edit:
-                    if st.button("+", key=f"sel_{wi}_{di}", use_container_width=True):
+                    # Build button label: date + event names
+                    lines = [day_date]
+                    for ev in evs:
+                        lines.append(ev["text"])
+                    if dk == "shabbat" and parasha:
+                        lines.append(parasha)
+                    btn_label = "\n".join(lines)
+
+                    if st.button(btn_label, key=f"sel_{wi}_{di}", use_container_width=True):
                         st.session_state["_dlg_data"] = data
                         st.session_state["_dlg_school_id"] = school_id
                         st.session_state["_dlg_wi"] = wi
@@ -1877,6 +1899,13 @@ def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list
                         st.session_state["_dlg_cls"] = cls
                         st.session_state["_dlg_allowed_classes"] = auth_info["allowed_classes"]
                         _edit_cell_dialog()
+                else:
+                    # Read-only: render styled cell
+                    chips = "".join(chip_html(e) for e in evs)
+                    if dk == "shabbat" and parasha:
+                        chips += f'<span class="cal-parasha">{parasha}</span>'
+                    even = wi % 2 == 0
+                    st.markdown(cell_html(day_date, chips, even), unsafe_allow_html=True)
 
 
 # ===================================================================
@@ -1975,7 +2004,7 @@ def main():
         st.markdown('<div class="logout-btn" style="padding-top:16px">', unsafe_allow_html=True)
         if st.button("יציאה", key="logout_btn", use_container_width=True):
             st.session_state["auth_logout_requested"] = True
-            for k in ("auth_email", "auth_name", "auth_token", "auth_uid", "auth_token_exp", "selected_school_id"):
+            for k in ("auth_email", "auth_name", "auth_token", "auth_uid", "auth_token_exp", "auth_refresh_token", "auth_sid", "selected_school_id"):
                 st.session_state.pop(k, None)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
