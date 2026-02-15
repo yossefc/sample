@@ -15,7 +15,7 @@
 
 set -e
 
-PROJECT_ID="YOUR_FIREBASE_PROJECT_ID"
+PROJECT_ID="table-93579"
 REGION="me-west1"
 SERVICE_NAME="luach-mivchanim"
 IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"

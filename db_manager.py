@@ -25,7 +25,7 @@ from pathlib import Path
 import streamlit as st
 
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import auth as firebase_auth, credentials, firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 # ---------------------------------------------------------------------------
@@ -108,6 +108,19 @@ def _get_db():
 
     _db = firestore.client()
     return _db
+
+
+def verify_firebase_token(id_token: str) -> dict | None:
+    """Verify a Firebase ID token and return the decoded claims.
+
+    Ensures the Admin SDK is initialised before verification.
+    Returns dict with 'uid', 'email', etc. or None on failure.
+    """
+    _get_db()  # ensure firebase_admin app is initialised
+    try:
+        return firebase_auth.verify_id_token(id_token)
+    except Exception:
+        return None
 
 
 # ===================================================================
@@ -405,17 +418,17 @@ def add_class_to_school(school_id: str, class_name: str):
 # PERMISSIONS (Staff Management)
 # ===================================================================
 
-def set_teacher_permission(school_id: str, teacher_email: str, allowed_classes: list[str]):
-    """Grant a teacher access to specific classes."""
+def set_teacher_permission(school_id: str, teacher_email: str, allowed_classes: list[str], role: str = "teacher"):
+    """Grant a user (teacher/director) access to specific classes."""
     db = _get_db()
     db.collection("schools").document(school_id) \
         .collection("permissions").document(teacher_email.lower()).set({
             "email": teacher_email.lower(),
-            "role": "teacher",
+            "role": role,
             "allowed_classes": allowed_classes,
             "updated_at": firestore.SERVER_TIMESTAMP,
         })
-    _sync_user_school(teacher_email, school_id, "teacher", allowed_classes)
+    _sync_user_school(teacher_email, school_id, role, allowed_classes)
 
 
 def remove_teacher_permission(school_id: str, teacher_email: str):

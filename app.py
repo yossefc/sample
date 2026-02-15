@@ -993,6 +993,11 @@ def page_manage_staff(auth_info: dict):
 
             # Inline edit panel
             if st.session_state.get(f"edit_toggle_{email}", False):
+                current_role = role  # "teacher" or "director"
+                new_role_label = st.radio("תפקיד", ["מורה", "מנהל"], 
+                                          index=0 if current_role != "director" else 1,
+                                          key=f"edit_role_{email}", horizontal=True)
+                
                 new_classes = st.multiselect(
                     "עדכן כיתות",
                     available_classes,
@@ -1001,13 +1006,17 @@ def page_manage_staff(auth_info: dict):
                 )
                 if st.button("שמור שינויים", key=f"save_edit_{email}",
                              type="primary", use_container_width=True):
-                    if new_classes:
-                        set_teacher_permission(school_id, email, new_classes)
+                    # Validate selection
+                    is_director = (new_role_label == "מנהל")
+                    if new_classes or is_director: 
+                        # Allow director with no specific classes if we want, but keeping safe for now
+                        final_role = "director" if is_director else "teacher"
+                        set_teacher_permission(school_id, email, new_classes, role=final_role)
                         st.session_state[f"edit_toggle_{email}"] = False
-                        st.toast(f"כיתות עודכנו עבור {email}", icon="✅")
+                        st.toast(f"עודכן בהצלחה: {email} ({new_role_label})", icon="✅")
                         st.rerun()
                     else:
-                        st.warning("יש לבחור לפחות כיתה אחת")
+                        st.warning("יש לבחור לפחות כיתה אחת (עבור מורה)")
 
     # ── Add new teacher ──
     st.markdown("---")
@@ -1017,24 +1026,37 @@ def page_manage_staff(auth_info: dict):
         unsafe_allow_html=True,
     )
     with st.form("add_teacher_form"):
-        teacher_email = st.text_input("אימייל", placeholder="teacher@school.co.il")
+        teacher_email = st.text_input("אימייל", placeholder="user@school.co.il")
+        role_type = st.radio("תפקיד", ["מורה", "מנהל"], horizontal=True)
         selected_classes = st.multiselect("כיתות מורשות", available_classes)
-        if st.form_submit_button("הוסף מורה", type="primary"):
+
+        if st.form_submit_button("הוסף איש צוות", type="primary"):
             email_clean = teacher_email.strip().lower()
             # Validations
             if not email_clean:
                 st.warning("יש להזין אימייל")
             elif not _is_valid_email(email_clean):
                 st.error("כתובת אימייל לא תקינה")
-            elif not selected_classes:
+            elif not selected_classes and role_type == "מורה": 
+                # Director might not need specific classes, but for now let's keep it simple or allow empty for director?
+                # The user didn't specify. Assuming director has access to everything usually, but here permissions are class-based.
+                # Let's keep the check for now but maybe relax it for director?
+                # Actually, in this system, director usually gets all classes or explicit ones.
+                # Let's require at least one class for everyone to be safe, or just warn.
+                # Re-reading existing code: "elif not selected_classes: st.warning..."
                 st.warning("יש לבחור לפחות כיתה אחת")
+            elif role_type == "מנהל" and not selected_classes:
+                 # If director, maybe we auto-assign all? Or just warn?
+                 # Let's enforce selection for now to avoid confusion.
+                 st.warning("יש לבחור כיתות (או הכל)")
             elif email_clean == my_email:
                 st.error("לא ניתן להוסיף את עצמך")
             elif perms and email_clean in perms:
                 st.warning(f"{email_clean} כבר קיים בצוות — ערוך כיתות דרך כפתור 'עריכה'")
             else:
-                set_teacher_permission(school_id, email_clean, selected_classes)
-                st.toast(f"{email_clean} נוסף בהצלחה!", icon="✅")
+                final_role = "director" if role_type == "מנהל" else "teacher"
+                set_teacher_permission(school_id, email_clean, selected_classes, role=final_role)
+                st.toast(f"{email_clean} נוסף בהצלחה ({role_type})!", icon="✅")
                 st.rerun()
 
     if staff_count > 0:
@@ -1638,7 +1660,7 @@ def main():
     with logout_col:
         st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
         if st.button("התנתק", key="logout_btn", use_container_width=True):
-            for k in ("auth_email", "auth_name", "auth_token", "selected_school_id"):
+            for k in ("auth_email", "auth_name", "auth_token", "auth_uid", "auth_token_exp", "selected_school_id"):
                 st.session_state.pop(k, None)
             st.rerun()
 

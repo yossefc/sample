@@ -1,8 +1,8 @@
 """
 auth_manager.py - Firebase Authentication for the school platform.
 
-Uses Firebase Auth REST API (email/password) - no Google Cloud OAuth needed.
-Requires `web_api_key` in Streamlit secrets under [firebase].
+Uses Firebase Auth REST API (email/password) server-side.
+Requires `web_api_key` and `project_id` in Streamlit secrets under [firebase].
 """
 
 from urllib.parse import urlsplit
