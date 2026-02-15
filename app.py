@@ -1749,6 +1749,72 @@ def _filter_weeks_by_range(data: dict, range_start, range_end):
 # MAIN SCHEDULER VIEW
 # ===================================================================
 
+@st.dialog("✏️ עריכת אירוע")
+def _edit_cell_dialog():
+    """Modal dialog for editing a single cell. Reads args from session_state."""
+    data = st.session_state["_dlg_data"]
+    school_id = st.session_state["_dlg_school_id"]
+    wi = st.session_state["_dlg_wi"]
+    di = st.session_state["_dlg_di"]
+    cls = st.session_state["_dlg_cls"]
+    allowed_classes = st.session_state["_dlg_allowed_classes"]
+
+    dk = DAY_KEYS[di]
+    wk = data["weeks"][wi]
+    day_date = get_day_date(wk.get("start_date", ""), di)
+    all_cell = wk["days"].get(dk, [])
+    vis = [e for e in all_cell if e.get("class") in (cls, "all")]
+
+    st.markdown(f"**{DAY_NAMES[di]} {day_date}**")
+
+    # ── Delete existing events ──
+    if vis:
+        for idx_ev, ev in enumerate(vis):
+            if st.button(
+                f"🗑 מחק: {ev['text']}", key=f"dlg_del_{idx_ev}",
+                use_container_width=True,
+            ):
+                all_cell.remove(ev)
+                save_schedule(school_id, data)
+                st.rerun()
+        st.divider()
+
+    # ── Add new event ──
+    nt = st.text_input("שם האירוע", placeholder="לדוגמה: מבחן")
+    tp = st.selectbox(
+        "סוג אירוע", list(STYLES.keys()),
+        format_func=lambda x: STYLES[x]["label"],
+    )
+    ecls = st.selectbox("כיתה יעד", allowed_classes + ["all"])
+
+    bagrut_start = ""
+    bagrut_end = ""
+    if tp == "bagrut":
+        tcol1, tcol2 = st.columns(2)
+        with tcol1:
+            bagrut_start = st.text_input("שעת התחלה", placeholder="09:00")
+        with tcol2:
+            bagrut_end = st.text_input("שעת סיום", placeholder="12:00")
+
+    if st.button("הוסף", type="primary", use_container_width=True):
+        if nt.strip():
+            if dk not in wk["days"]:
+                wk["days"][dk] = []
+            event_payload = {"text": nt.strip(), "type": tp, "class": ecls}
+            if tp == "bagrut":
+                st_time = _normalize_exam_time(bagrut_start)
+                en_time = _normalize_exam_time(bagrut_end)
+                if st_time and en_time:
+                    event_payload["text"] = f"{nt.strip()} {st_time}-{en_time}"
+                elif st_time:
+                    event_payload["text"] = f"{nt.strip()} {st_time}"
+                event_payload["start_time"] = st_time
+                event_payload["end_time"] = en_time
+            wk["days"][dk].append(event_payload)
+            save_schedule(school_id, data)
+            st.rerun()
+
+
 @st.fragment
 def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list):
     """Render the main visual schedule grid."""
@@ -1786,7 +1852,7 @@ def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list
         with hcols[i]:
             st.markdown(f'<div class="cal-hdr">{dn}</div>', unsafe_allow_html=True)
 
-    # ── Week rows ──
+    # ── Week rows: only lightweight buttons, no heavy popover widgets ──
     for wi, wk in filtered_weeks:
         parasha = pm.get(wk["start_date"], "")
         rcols = st.columns(7)
@@ -1803,64 +1869,14 @@ def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list
                 st.markdown(cell_html(day_date, chips, even), unsafe_allow_html=True)
 
                 if can_edit:
-                    all_cell = wk["days"].get(dk, [])
-                    vis = [e for e in all_cell if e.get("class") in (cls, "all")]
-
-                    with st.popover("+", use_container_width=True):
-                        st.markdown(f"**{DAY_NAMES[di]} {day_date}**")
-
-                        for idx_ev, ev in enumerate(vis):
-                            if st.button(
-                                f"מחק {ev['text']}", key=f"del_{wi}_{di}_{idx_ev}",
-                                use_container_width=True,
-                            ):
-                                all_cell.remove(ev)
-                                save_schedule(school_id, data)
-                                st.rerun()
-
-                        nt = st.text_input("שם האירוע", key=f"t_{wi}_{di}", placeholder="לדוגמה: מבחן")
-                        tp = st.selectbox(
-                            "סוג אירוע", list(STYLES.keys()),
-                            format_func=lambda x: STYLES[x]["label"],
-                            key=f"tp_{wi}_{di}",
-                        )
-                        ecls = st.selectbox(
-                            "כיתה יעד", auth_info["allowed_classes"] + ["all"],
-                            key=f"c_{wi}_{di}",
-                        )
-                        bagrut_start = ""
-                        bagrut_end = ""
-                        if tp == "bagrut":
-                            tcol1, tcol2 = st.columns(2)
-                            with tcol1:
-                                bagrut_start = st.text_input(
-                                    "שעת התחלה",
-                                    key=f"st_{wi}_{di}",
-                                    placeholder="09:00",
-                                )
-                            with tcol2:
-                                bagrut_end = st.text_input(
-                                    "שעת סיום",
-                                    key=f"en_{wi}_{di}",
-                                    placeholder="12:00",
-                                )
-                        if st.button("הוסף", key=f"a_{wi}_{di}", type="primary", use_container_width=True):
-                            if nt.strip():
-                                if dk not in wk["days"]:
-                                    wk["days"][dk] = []
-                                event_payload = {"text": nt.strip(), "type": tp, "class": ecls}
-                                if tp == "bagrut":
-                                    st_time = _normalize_exam_time(bagrut_start)
-                                    en_time = _normalize_exam_time(bagrut_end)
-                                    if st_time and en_time:
-                                        event_payload["text"] = f"{nt.strip()} {st_time}-{en_time}"
-                                    elif st_time:
-                                        event_payload["text"] = f"{nt.strip()} {st_time}"
-                                    event_payload["start_time"] = st_time
-                                    event_payload["end_time"] = en_time
-                                wk["days"][dk].append(event_payload)
-                                save_schedule(school_id, data)
-                                st.rerun()
+                    if st.button("+", key=f"sel_{wi}_{di}", use_container_width=True):
+                        st.session_state["_dlg_data"] = data
+                        st.session_state["_dlg_school_id"] = school_id
+                        st.session_state["_dlg_wi"] = wi
+                        st.session_state["_dlg_di"] = di
+                        st.session_state["_dlg_cls"] = cls
+                        st.session_state["_dlg_allowed_classes"] = auth_info["allowed_classes"]
+                        _edit_cell_dialog()
 
 
 # ===================================================================
