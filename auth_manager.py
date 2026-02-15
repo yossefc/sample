@@ -208,6 +208,9 @@ def _persist_login_session(email: str, name: str, refresh_token: str = ""):
             "expires_at": now + _AUTH_SESSION_TTL_SECONDS,
         }
     )
+    id_token = str(st.session_state.get("auth_token", "")).strip()
+    if id_token:
+        session_data["id_token"] = id_token
     if refresh_token:
         session_data["refresh_token"] = refresh_token
 
@@ -313,22 +316,27 @@ def _restore_login_from_persistent_session() -> dict | None:
         return None
 
     refresh_token = str(info.get("refresh_token", "")).strip()
-    if not refresh_token:
-        sessions.pop(sid, None)
-        _save_auth_sessions(sessions)
-        _remove_query_param("sid")
-        return None
+    refreshed = {}
+    identity = None
+    id_token = ""
 
-    refreshed = _firebase_refresh_id_token(refresh_token)
-    if "error" in refreshed:
-        sessions.pop(sid, None)
-        _save_auth_sessions(sessions)
-        _remove_query_param("sid")
-        return None
+    if refresh_token:
+        refreshed = _firebase_refresh_id_token(refresh_token)
+        if "error" not in refreshed:
+            id_token = refreshed.get("idToken", "")
+            identity = _identity_from_id_token(id_token)
 
-    id_token = refreshed.get("idToken", "")
-    identity = _identity_from_id_token(id_token)
-    if not identity:
+    # Fallback for legacy sessions that don't yet have refresh token:
+    # use last known id token if still valid.
+    if identity is None:
+        cached_id_token = str(info.get("id_token", "")).strip()
+        if cached_id_token:
+            cached_identity = _identity_from_id_token(cached_id_token)
+            if cached_identity:
+                id_token = cached_id_token
+                identity = cached_identity
+
+    if identity is None:
         sessions.pop(sid, None)
         _save_auth_sessions(sessions)
         _remove_query_param("sid")
@@ -347,7 +355,7 @@ def _restore_login_from_persistent_session() -> dict | None:
     st.session_state["auth_email"] = email
     st.session_state["auth_name"] = name
     st.session_state["auth_token"] = id_token
-    st.session_state["auth_refresh_token"] = refreshed.get("refreshToken", refresh_token)
+    st.session_state["auth_refresh_token"] = refreshed.get("refreshToken", refresh_token) if refreshed else refresh_token
     st.session_state["auth_sid"] = sid
     if uid:
         st.session_state["auth_uid"] = uid
@@ -761,6 +769,15 @@ def authenticate() -> dict:
     if "auth_email" in st.session_state:
         email = st.session_state["auth_email"]
         name = st.session_state.get("auth_name", email)
+
+        # Silent browser-auth sync: fetch refresh token/sid if available.
+        if _can_use_browser_auth():
+            sync_payload = _render_browser_auth_widget(action="auth", height=1, key="firebase_auth_sync")
+            _consume_browser_auth_payload(sync_payload)
+            email = st.session_state.get("auth_email", email)
+            name = st.session_state.get("auth_name", name)
+
+        _persist_login_session(email, name, st.session_state.get("auth_refresh_token", ""))
         result["authenticated"] = True
         result["email"] = email
         result["name"] = name

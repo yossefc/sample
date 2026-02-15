@@ -11,6 +11,7 @@ No hardcoded dates - all dates come from Firestore or external APIs.
 """
 
 import hashlib
+import html
 import io
 import json
 import re
@@ -42,15 +43,41 @@ from db_manager import (
 # ===================================================================
 
 STYLES = {
-    "bagrut":   {"bg": "#FFCDD2", "fg": "#B71C1C", "bold": True,  "label": "בגרות"},
-    "magen":    {"bg": "#FFE0B2", "fg": "#E65100", "bold": True,  "label": "מגן / מתכונת"},
-    "trip":     {"bg": "#C8E6C9", "fg": "#1B5E20", "bold": False, "label": "טיול / מסע"},
-    "vacation": {"bg": "#BBDEFB", "fg": "#0D47A1", "bold": False, "label": "חופשה"},
-    "holiday":  {"bg": "#E1BEE7", "fg": "#4A148C", "bold": False, "label": "חג / מועד"},
-    "general":  {"bg": "#F5F5F5", "fg": "#424242", "bold": False, "label": "כללי"},
+    "bagrut": {
+        "bg": "#FEE2E2", "fg": "#9F1239", "border": "#FDA4AF",
+        "btn_from": "#E11D48", "btn_to": "#BE123C", "btn_fg": "#FFFFFF",
+        "bold": True, "label": "בגרות", "icon": "🎓",
+    },
+    "magen": {
+        "bg": "#FFEDD5", "fg": "#9A3412", "border": "#FDBA74",
+        "btn_from": "#EA580C", "btn_to": "#C2410C", "btn_fg": "#FFFFFF",
+        "bold": True, "label": "מגן / מתכונת", "icon": "📝",
+    },
+    "trip": {
+        "bg": "#DCFCE7", "fg": "#166534", "border": "#86EFAC",
+        "btn_from": "#16A34A", "btn_to": "#15803D", "btn_fg": "#FFFFFF",
+        "bold": False, "label": "טיול / מסע", "icon": "🚌",
+    },
+    "vacation": {
+        "bg": "#DBEAFE", "fg": "#1D4ED8", "border": "#93C5FD",
+        "btn_from": "#2563EB", "btn_to": "#1D4ED8", "btn_fg": "#FFFFFF",
+        "bold": False, "label": "חופשה", "icon": "🏖️",
+    },
+    "holiday": {
+        "bg": "#F3E8FF", "fg": "#6B21A8", "border": "#C4B5FD",
+        "btn_from": "#A855F7", "btn_to": "#7E22CE", "btn_fg": "#FFFFFF",
+        "bold": False, "label": "חג / מועד", "icon": "🎉",
+    },
+    "general": {
+        "bg": "#FEF3C7", "fg": "#92400E", "border": "#FCD34D",
+        "btn_from": "#F59E0B", "btn_to": "#D97706", "btn_fg": "#FFFFFF",
+        "bold": False, "label": "כללי", "icon": "📚",
+    },
 }
+EVENT_TYPE_ORDER = ["bagrut", "magen", "trip", "vacation", "holiday", "general"]
 
 LOCKED_TYPES = {"trip"}
+CELL_EDIT_TRIGGER_LABEL = "✏️"
 
 DAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"]
 DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "shabbat"]
@@ -76,6 +103,10 @@ html, body, .stApp {
     color: #1E1E2D;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    background:
+        radial-gradient(circle at 8% 8%, #FFF7ED 0%, transparent 28%),
+        radial-gradient(circle at 92% 14%, #DBEAFE 0%, transparent 26%),
+        #F8FAFC;
 }
 
 /* ── Hide default Streamlit chrome ── */
@@ -89,6 +120,8 @@ div[data-testid="stDecoration"] {display: none;}
 .block-container {
     padding-top: 1rem;
     padding-bottom: 0;
+    padding-left: 0.8rem;
+    padding-right: 0.8rem;
     max-width: 100% !important;
 }
 
@@ -139,24 +172,185 @@ div[data-testid="stTabs"] .app-title { display: none; }
     border-radius: 0;
 }
 
-/* ── Cell buttons (clickable cells) ── */
-div[data-testid="stColumn"] div.stButton > button {
-    min-height: 72px;
-    white-space: pre-wrap;
-    text-align: center;
-    font-size: 0.78em;
-    line-height: 1.5;
-    border: 1px solid #DEE2E6;
-    border-radius: 6px;
-    background: #FFFFFF;
-    color: #1E1E2D;
-    padding: 4px 3px;
-    cursor: pointer;
-    transition: background 0.15s;
+/* ── Calendar cell edit trigger (small pencil only) ── */
+.cell-edit-trigger-marker { display: none; }
+div[data-testid="stButton"] > button[id^="sel_"] {
+    display: block !important;
+    min-height: 14px !important;
+    height: 14px !important;
+    width: 14px !important;
+    min-width: 14px !important;
+    max-width: 14px !important;
+    margin-top: -74px !important;
+    margin-bottom: 58px !important;
+    margin-left: auto !important;
+    margin-right: 2px !important;
+    float: right !important;
+    border: none !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    color: #3949AB !important;
+    box-shadow: none !important;
+    outline: none !important;
+    cursor: pointer !important;
+    z-index: 10 !important;
+    position: relative !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    line-height: 1 !important;
+    font-size: 0.52rem !important;
+    opacity: 0.92 !important;
+    transform: scaleX(0.5) scaleY(0.9) !important;
+    transform-origin: top right !important;
 }
-div[data-testid="stColumn"] div.stButton > button:hover {
-    background: #E8EAF6;
-    border-color: #1A237E;
+div[data-testid="stButton"] > button[id^="sel_"]:hover,
+div[data-testid="stButton"] > button[id^="sel_"]:focus,
+div[data-testid="stButton"] > button[id^="sel_"]:focus-visible,
+div[data-testid="stButton"] > button[id^="sel_"]:active {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    border-color: transparent !important;
+    color: #283593 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    opacity: 1 !important;
+}
+div[data-testid="stButton"] > button[id^="sel_"] p {
+    display: block !important;
+    margin: 0 !important;
+    line-height: 1 !important;
+}
+
+/* ── Compact edit modal ── */
+div[data-testid="stDialog"] [role="dialog"] {
+    width: min(430px, calc(100vw - 20px)) !important;
+    max-width: min(430px, calc(100vw - 20px)) !important;
+    max-height: min(84vh, 640px) !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.22) !important;
+}
+div[data-testid="stDialog"] [role="dialog"] > div {
+    max-height: min(84vh, 640px) !important;
+    overflow: auto !important;
+    background: #FFFFFF !important;
+}
+div[data-testid="stDialog"] [role="dialog"] .edit-modal-marker + div[data-testid="element-container"] p {
+    margin-top: 0 !important;
+}
+div[data-testid="stDialog"] [role="dialog"] .edit-modal-date-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #EEF2FF;
+    color: #1E3A8A;
+    border: 1px solid #C7D2FE;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    margin: 0 0 1px;
+}
+div[data-testid="stDialog"] [role="dialog"] .edit-modal-section-title {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #1A237E;
+    margin: 6px 0 2px;
+}
+div[data-testid="stDialog"] [role="dialog"] .edit-modal-help {
+    color: #64748B;
+    font-size: 0.72rem;
+    margin-top: -2px;
+    margin-bottom: 2px;
+}
+div[data-testid="stDialog"] [role="dialog"] .edit-modal-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+div[data-testid="stDialog"] [role="dialog"] .edit-modal-divider {
+    border-top: 1px solid #E2E8F0;
+    margin: 4px 0 2px;
+}
+div[data-testid="stDialog"] [role="dialog"] .edit-modal-footer-note {
+    color: #64748B;
+    font-size: 0.71rem;
+    margin: 0 0 2px;
+}
+/* Tighten controls inside edit modal to avoid vertical scrolling */
+div[data-testid="stDialog"] [role="dialog"] .stTextInput,
+div[data-testid="stDialog"] [role="dialog"] .stSelectbox,
+div[data-testid="stDialog"] [role="dialog"] .stButton,
+div[data-testid="stDialog"] [role="dialog"] .stMarkdown {
+    margin-top: 0.06rem !important;
+    margin-bottom: 0.06rem !important;
+}
+div[data-testid="stDialog"] [role="dialog"] div[data-testid="stHorizontalBlock"] { gap: 0.34rem !important; }
+div[data-testid="stDialog"] [role="dialog"] .stTextInput > div > div > input,
+div[data-testid="stDialog"] [role="dialog"] .stSelectbox > div > div,
+div[data-testid="stDialog"] [role="dialog"] .stTimeInput > div > div > input {
+    min-height: 32px !important;
+    border-radius: 8px !important;
+    border-color: #CBD5E1 !important;
+    font-size: 0.81rem !important;
+    padding-top: 0.04rem !important;
+    padding-bottom: 0.04rem !important;
+}
+div[data-testid="stDialog"] [role="dialog"] .stButton > button {
+    min-height: 32px !important;
+    padding-top: 0.08rem !important;
+    padding-bottom: 0.08rem !important;
+}
+div[data-testid="stDialog"] [role="dialog"] .stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #2B3ED3, #1A237E) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+}
+div[data-testid="stDialog"] [role="dialog"] .stButton > button[kind="secondary"] {
+    background: #F8FAFC !important;
+    color: #1E293B !important;
+    border-color: #CBD5E1 !important;
+}
+div[data-testid="stDialog"] [role="dialog"] .stButton > button[kind="tertiary"] {
+    background: transparent !important;
+    border: 1px solid #E2E8F0 !important;
+    color: #475569 !important;
+}
+div[data-testid="stDialog"] [role="dialog"] label {
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    color: #334155 !important;
+}
+div[data-testid="stDialog"] [role="dialog"] .stSelectbox [data-baseweb="select"] {
+    min-height: 36px !important;
+}
+div[data-testid="stDialog"] [role="dialog"] .stCaption,
+div[data-testid="stDialog"] [role="dialog"] p {
+    line-height: 1.28 !important;
+}
+div[data-testid="stDialog"] [role="dialog"] [data-testid="stVerticalBlockBorderWrapper"] {
+    border-radius: 12px !important;
+    border-color: #E2E8F0 !important;
+    background: #F8FAFC !important;
+}
+div[data-testid="stDialog"] [role="dialog"] [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"] button {
+    min-height: 30px !important;
+    border-radius: 9px !important;
+}
+div[data-testid="stDialog"] [role="dialog"] [data-testid="stVerticalBlockBorderWrapper"] p {
+    font-size: 0.76rem !important;
 }
 
 /* ── Legend chips ── */
@@ -197,19 +391,19 @@ div[data-testid="stPopover"] button:hover { background: #C5CAE9 !important; }
    ------------------------------------------------------------------ */
 :root {
     --ds-surface: #FFFFFF;
-    --ds-bg-subtle: #F8F9FC;
-    --ds-border: #E2E5EF;
-    --ds-border-subtle: #ECEEF5;
-    --ds-primary: #1A237E;
-    --ds-primary-light: #E8EAF6;
-    --ds-primary-medium: #C5CAE9;
-    --ds-text: #1E1E2D;
-    --ds-text-muted: #6B7294;
-    --ds-primary-strong: #2434A6;
-    --ds-radius: 10px;
+    --ds-bg-subtle: #FFFBEB;
+    --ds-border: #D7E3FA;
+    --ds-border-subtle: #E7EFFD;
+    --ds-primary: #1D4ED8;
+    --ds-primary-light: #DBEAFE;
+    --ds-primary-medium: #93C5FD;
+    --ds-text: #1F2937;
+    --ds-text-muted: #64748B;
+    --ds-primary-strong: #1E3A8A;
+    --ds-radius: 12px;
     --ds-radius-sm: 6px;
-    --ds-shadow: 0 1px 3px rgba(26,35,126,0.06), 0 1px 2px rgba(0,0,0,0.04);
-    --ds-shadow-hover: 0 4px 12px rgba(26,35,126,0.10);
+    --ds-shadow: 0 2px 8px rgba(30, 58, 138, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --ds-shadow-hover: 0 8px 18px rgba(30, 58, 138, 0.14);
     --ds-transition: all 0.15s ease;
 }
 
@@ -220,9 +414,9 @@ button[data-testid="stSidebarCollapsedControl"] { display: none !important; }
 /* ── Top bar ── */
 .top-bar {
     display: flex; align-items: center; justify-content: space-between;
-    background: linear-gradient(135deg, #1A237E 0%, #283593 100%);
+    background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 54%, #38BDF8 100%);
     border-radius: 14px; padding: 14px 24px;
-    box-shadow: 0 4px 20px rgba(26,35,126,0.18);
+    box-shadow: 0 8px 24px rgba(30, 58, 138, 0.22);
     margin-bottom: 10px; gap: 16px; flex-wrap: wrap;
     color: #fff;
 }
@@ -260,14 +454,14 @@ button[data-testid="stSidebarCollapsedControl"] { display: none !important; }
 
 /* ── Controls row (class + date) ── */
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .ctrl-row-marker) {
-    background: var(--ds-surface);
-    border: 1px solid var(--ds-border);
-    border-radius: var(--ds-radius);
-    padding: 8px 12px 4px;
+    background: linear-gradient(180deg, #FFFFFF 0%, #F8FBFF 100%);
+    border: 1px solid #CFE0FB;
+    border-radius: 14px;
+    padding: 9px 12px 5px;
     box-shadow: var(--ds-shadow);
     margin-bottom: 6px;
     position: sticky;
-    top: 10px;
+    top: 8px;
     z-index: 30;
     backdrop-filter: blur(6px);
 }
@@ -275,11 +469,12 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > 
     font-size: 0.74rem; font-weight: 600; color: var(--ds-text-muted);
 }
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .ctrl-row-marker) .stSelectbox > div > div {
-    border-radius: 6px; border-color: var(--ds-border);
+    border-radius: 10px; border-color: #C7D2FE;
     font-weight: 600; font-size: 0.83rem; min-height: 34px;
 }
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .ctrl-row-marker) .stDateInput > div > div > input {
-    border-radius: 6px; font-weight: 500; font-size: 0.8rem; padding: 5px 8px;
+    border-radius: 10px; font-weight: 500; font-size: 0.8rem; padding: 5px 8px;
+    border-color: #C7D2FE !important;
 }
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .ctrl-row-marker) .stSelectbox,
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .ctrl-row-marker) .stDateInput {
@@ -292,15 +487,30 @@ div[data-testid="stRadio"] [role="radiogroup"] {
 }
 div[data-testid="stRadio"] label p {
     white-space: nowrap !important;
-    word-break: keep-all !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
     line-height: 1.15 !important;
+}
+div[data-testid="stRadio"] label {
+    min-width: fit-content !important;
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .side-panel-marker) div[data-testid="stRadio"] [role="radiogroup"] {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.9rem !important;
+    flex-wrap: wrap !important;
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .side-panel-marker) div[data-testid="stRadio"] label p {
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
 }
 
 /* ── Export toolbar ── */
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .export-bar-marker) {
-    background: var(--ds-bg-subtle);
-    border: 1px solid var(--ds-border-subtle);
-    border-radius: 8px;
+    background: linear-gradient(180deg, #FFFFFF 0%, #FFFDF3 100%);
+    border: 1px solid #E7D9A7;
+    border-radius: 12px;
     padding: 6px 10px 2px;
     margin-bottom: 6px;
 }
@@ -440,28 +650,138 @@ div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
 .nav-btn .nav-icon { font-size: 1.1rem; line-height: 1; }
 
 /* ── Unified button system ── */
-.stButton > button, .stDownloadButton > button {
+.stButton > button:not([kind="tertiary"]), .stDownloadButton > button {
     font-family: 'Rubik', 'Assistant', sans-serif !important;
     font-weight: 700 !important;
     font-size: 0.86rem !important;
     letter-spacing: 0.01em !important;
-    border-radius: 10px !important;
-    border: 1px solid #D8DDF0 !important;
-    box-shadow: 0 2px 6px rgba(31, 41, 55, 0.08) !important;
+    border-radius: 12px !important;
+    border: 1px solid #CEDDFB !important;
+    box-shadow: 0 4px 10px rgba(30, 58, 138, 0.08) !important;
     transition: transform 0.14s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease !important;
 }
-.stButton > button:hover, .stDownloadButton > button:hover {
+.stButton > button:not([kind="tertiary"]):hover, .stDownloadButton > button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 16px rgba(31, 41, 55, 0.12) !important;
+    box-shadow: 0 10px 18px rgba(30, 58, 138, 0.14) !important;
 }
 .stButton > button[kind="primary"], .stDownloadButton > button[kind="primary"] {
-    background: linear-gradient(135deg, var(--ds-primary-strong), var(--ds-primary)) !important;
+    background: linear-gradient(135deg, var(--ds-primary-strong), var(--ds-primary), #38BDF8) !important;
     color: #fff !important;
     border-color: transparent !important;
-    box-shadow: 0 10px 20px rgba(26, 35, 126, 0.28) !important;
+    box-shadow: 0 12px 22px rgba(30, 58, 138, 0.24) !important;
 }
 .stButton > button[kind="primary"]:hover, .stDownloadButton > button[kind="primary"]:hover {
     filter: brightness(1.03);
+}
+/* Management row above table */
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-row-marker) {
+    background: linear-gradient(180deg, #FFFFFF 0%, #F8FBFF 100%);
+    border: 1px solid #CFE0FB;
+    border-radius: 16px;
+    padding: 10px 12px 9px;
+    box-shadow: 0 8px 20px rgba(30, 58, 138, 0.1);
+    margin-bottom: 10px;
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-row-marker) > div[data-testid="stHorizontalBlock"] {
+    gap: 0.58rem !important;
+    margin-bottom: 0.34rem;
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-row-marker) > div[data-testid="stHorizontalBlock"]:last-of-type {
+    margin-bottom: 0;
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-row-marker) .stButton > button {
+    min-height: 42px !important;
+    border-radius: 12px !important;
+    font-size: 0.84rem !important;
+    font-weight: 800 !important;
+    padding-inline: 10px !important;
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-row-marker) .stButton > button p {
+    white-space: nowrap !important;
+    line-height: 1.12 !important;
+    letter-spacing: 0.01em !important;
+}
+.manage-row-title {
+    font-size: 0.84rem;
+    font-weight: 800;
+    color: #1E3A8A;
+    margin: 0 0 8px;
+    border-bottom: 2px solid #DBEAFE;
+    padding-bottom: 6px;
+}
+.manage-row-marker { display: none; }
+/* Side management column next to table */
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-side-marker) {
+    background: linear-gradient(180deg, #FFFFFF 0%, #F8FBFF 100%);
+    border: 1px solid #CFE0FB;
+    border-radius: 16px;
+    padding: 10px 10px 9px;
+    box-shadow: 0 8px 20px rgba(30, 58, 138, 0.1);
+    margin-top: 260px;
+    position: sticky;
+    top: 10px;
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-side-marker) .stButton > button {
+    min-height: 42px !important;
+    border-radius: 12px !important;
+    font-size: 0.82rem !important;
+    font-weight: 800 !important;
+    padding-inline: 9px !important;
+    margin-bottom: 0.22rem;
+}
+div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-side-marker) .stButton > button p {
+    white-space: normal !important;
+    line-height: 1.12 !important;
+}
+.manage-side-title {
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: #1E3A8A;
+    margin: 0 0 8px;
+    border-bottom: 2px solid #DBEAFE;
+    padding-bottom: 6px;
+}
+.manage-side-marker { display: none; }
+@media (max-width: 1100px) {
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-row-marker) .stButton > button {
+        min-height: 39px !important;
+        font-size: 0.78rem !important;
+        padding-inline: 7px !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-row-marker) .stButton > button p {
+        white-space: normal !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-side-marker) .stButton > button {
+        min-height: 39px !important;
+        font-size: 0.77rem !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-side-marker) {
+        margin-top: 220px;
+    }
+}
+@media (max-width: 760px) {
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-row-marker) {
+        padding: 8px 8px 7px;
+        border-radius: 14px;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-row-marker) .stButton > button {
+        min-height: 36px !important;
+        font-size: 0.72rem !important;
+        padding-inline: 5px !important;
+    }
+    .manage-row-title {
+        font-size: 0.79rem;
+        margin-bottom: 6px;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-side-marker) {
+        position: static;
+        padding: 8px 8px 7px;
+        margin-top: 0;
+    }
+    .manage-side-title {
+        font-size: 0.79rem;
+        margin-bottom: 6px;
+    }
 }
 /* Side action buttons */
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .side-actions-marker) .stButton > button {
@@ -615,6 +935,38 @@ def check_conflicts_on_date(weeks: list, wi: int, dk: str, cls: str) -> list[str
         ev["text"] for ev in events
         if ev.get("type") in LOCKED_TYPES and ev.get("class") in (cls, "all")
     ]
+
+
+def _event_type_label(event_type: str) -> str:
+    style = STYLES.get(event_type, STYLES["general"])
+    icon = style.get("icon", "")
+    label = style.get("label", event_type)
+    return f"{icon} {label}".strip()
+
+
+def _event_button_theme_css(button_id_prefix: str, event_type: str) -> str:
+    style = STYLES.get(event_type, STYLES["general"])
+    btn_from = style.get("btn_from", style.get("btn", "#2434A6"))
+    btn_to = style.get("btn_to", style.get("btn", "#1A237E"))
+    btn_fg = style.get("btn_fg", "#FFFFFF")
+    border = style.get("border", btn_to)
+    return (
+        "<style>"
+        f"div[data-testid=\"stButton\"] > button[id^=\"{button_id_prefix}\"]"
+        "{"
+        f"background:linear-gradient(135deg, {btn_from}, {btn_to}) !important;"
+        f"color:{btn_fg} !important;"
+        f"border:1px solid {border} !important;"
+        "box-shadow:0 10px 18px rgba(15,23,42,0.2) !important;"
+        "letter-spacing:0.01em !important;"
+        "}"
+        f"div[data-testid=\"stButton\"] > button[id^=\"{button_id_prefix}\"]:hover"
+        "{"
+        "filter:brightness(1.08) saturate(1.05) !important;"
+        "transform:translateY(-1px) !important;"
+        "}"
+        "</style>"
+    )
 
 
 def fetch_parasha_from_api(start_year: int, end_year: int) -> dict:
@@ -910,10 +1262,16 @@ def resync_dates_with_ministry(data: dict, cls: str) -> list[dict]:
 def chip_html(ev: dict) -> str:
     s = STYLES.get(ev.get("type", "general"), STYLES["general"])
     w = "700" if s["bold"] else "400"
+    raw_text = str(ev.get("text", ""))
+    icon = s.get("icon", "")
+    if icon and not raw_text.startswith(icon):
+        raw_text = f"{icon} {raw_text}"
+    safe_text = html.escape(raw_text)
     return (
         f'<span style="background:{s["bg"]};color:{s["fg"]};font-weight:{w};'
+        f'border:1px solid {s.get("border", "#CBD5E1")};'
         f'padding:2px 8px;border-radius:10px;font-size:0.78em;display:inline-block;'
-        f'margin:1px 0;line-height:1.4;">{ev["text"]}</span>'
+        f'margin:1px 0;line-height:1.4;">{safe_text}</span>'
     )
 
 
@@ -923,7 +1281,7 @@ def cell_html(date_str: str, chips_html: str, even: bool = False) -> str:
         f'<div style="background:{bg};border:1px solid #DEE2E6;border-radius:6px;'
         f'padding:4px 3px;min-height:72px;text-align:center;display:flex;'
         f'flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;'
-        f'overflow:visible;">'
+        f'overflow:visible;width:100%;box-sizing:border-box;position:relative;">'
         f'<div style="color:#90A4AE;font-size:0.7em;font-weight:500;flex-shrink:0;">{date_str}</div>'
         f'{chips_html}</div>'
     )
@@ -1253,9 +1611,13 @@ def page_manage_staff(auth_info: dict):
             # Inline edit panel
             if st.session_state.get(f"edit_toggle_{email}", False):
                 current_role = role  # "teacher" or "director"
-                new_role_label = st.radio("תפקיד", ["מורה", "מנהל"], 
-                                          index=0 if current_role != "director" else 1,
-                                          key=f"edit_role_{email}", horizontal=False)
+                new_role_label = st.radio(
+                    "תפקיד",
+                    ["מורה", "מנהל"],
+                    index=0 if current_role != "director" else 1,
+                    key=f"edit_role_{email}",
+                    horizontal=True,
+                )
                  
                 new_classes = st.multiselect(
                     "עדכן כיתות",
@@ -1287,7 +1649,7 @@ def page_manage_staff(auth_info: dict):
     )
     with st.form("add_teacher_form"):
         teacher_email = st.text_input("אימייל", placeholder="teacher@school.org")
-        role_type = st.radio("תפקיד", ["מורה", "מנהל"], horizontal=False)
+        role_type = st.radio("תפקיד", ["מורה", "מנהל"], horizontal=True)
         selected_classes = st.multiselect("כיתות", available_classes, placeholder="בחר כיתות")
 
         if st.form_submit_button("הוסף", type="primary", use_container_width=True):
@@ -1406,8 +1768,8 @@ def _sidebar_add_event_form(data: dict, cls: str, school_id: str, auth_info: dic
     with col_type:
         event_type = st.selectbox(
             "סוג אירוע",
-            list(STYLES.keys()),
-            format_func=lambda x: STYLES[x]["label"],
+            EVENT_TYPE_ORDER,
+            format_func=_event_type_label,
             key="sidebar_event_type",
         )
     event_cls = st.selectbox(
@@ -1423,30 +1785,48 @@ def _sidebar_add_event_form(data: dict, cls: str, school_id: str, auth_info: dic
             bagrut_start = st.text_input("שעת התחלה", key="sidebar_bagrut_start", placeholder="09:00")
         with t2:
             bagrut_end = st.text_input("שעת סיום", key="sidebar_bagrut_end", placeholder="12:00")
-    if st.button("הוסף", key="sidebar_add_event_btn", type="primary", use_container_width=True):
-        if event_text.strip():
-            target = datetime.combine(event_date, datetime.min.time())
-            loc = date_to_week_day(data["weeks"], target)
-            if loc:
-                wi, dk = loc
-                event_payload = {"text": event_text.strip(), "type": event_type, "class": event_cls}
-                if event_type == "bagrut":
-                    st_time = _normalize_exam_time(bagrut_start)
-                    en_time = _normalize_exam_time(bagrut_end)
-                    if st_time and en_time:
-                        event_payload["text"] = f"{event_text.strip()} {st_time}-{en_time}"
-                    elif st_time:
-                        event_payload["text"] = f"{event_text.strip()} {st_time}"
-                    event_payload["start_time"] = st_time
-                    event_payload["end_time"] = en_time
-                data["weeks"][wi]["days"].setdefault(dk, []).append(event_payload)
-                save_schedule(school_id, data)
-                st.toast("אירוע נוסף!")
-                st.rerun()
-            else:
-                st.warning("התאריך מחוץ לטווח הלוח")
-        else:
+    st.markdown(_event_button_theme_css("sidebar_add_event_btn", event_type), unsafe_allow_html=True)
+    add_label = f'{STYLES.get(event_type, STYLES["general"]).get("icon", "📌")} הוסף'
+    if st.button(add_label, key="sidebar_add_event_btn", type="primary", use_container_width=True):
+        clean_text = event_text.strip()
+        if not clean_text:
             st.warning("הזן שם אירוע")
+            return
+        if len(clean_text) < 2:
+            st.warning("שם האירוע קצר מדי (לפחות 2 תווים)")
+            return
+        if len(clean_text) > 40:
+            st.warning("שם האירוע ארוך מדי (עד 40 תווים)")
+            return
+
+        st_time = ""
+        en_time = ""
+        if event_type == "bagrut":
+            st_time = _normalize_exam_time(bagrut_start)
+            en_time = _normalize_exam_time(bagrut_end)
+            if not st_time or not en_time:
+                st.warning("יש להזין שעות התחלה וסיום בפורמט תקין (לדוגמה 09:00)")
+                return
+            if en_time <= st_time:
+                st.warning("שעת הסיום חייבת להיות אחרי שעת ההתחלה")
+                return
+
+        target = datetime.combine(event_date, datetime.min.time())
+        loc = date_to_week_day(data["weeks"], target)
+        if not loc:
+            st.warning("התאריך מחוץ לטווח הלוח")
+            return
+
+        wi, dk = loc
+        event_payload = {"text": clean_text, "type": event_type, "class": event_cls}
+        if event_type == "bagrut":
+            event_payload["text"] = f"{clean_text} {st_time}-{en_time}"
+            event_payload["start_time"] = st_time
+            event_payload["end_time"] = en_time
+        data["weeks"][wi]["days"].setdefault(dk, []).append(event_payload)
+        save_schedule(school_id, data)
+        st.toast("אירוע נוסף!")
+        st.rerun()
 
 
 def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
@@ -1769,7 +2149,7 @@ def _filter_weeks_by_range(data: dict, range_start, range_end):
 # MAIN SCHEDULER VIEW
 # ===================================================================
 
-@st.dialog("✏️ עריכת אירוע")
+@st.dialog("✏️ עריכת אירוע", width="small")
 def _edit_cell_dialog():
     """Modal dialog for editing a single cell. Reads args from session_state."""
     data = st.session_state["_dlg_data"]
@@ -1782,56 +2162,79 @@ def _edit_cell_dialog():
     dk = DAY_KEYS[di]
     wk = data["weeks"][wi]
     day_date = get_day_date(wk.get("start_date", ""), di)
-    all_cell = wk["days"].get(dk, [])
-    vis = [e for e in all_cell if e.get("class") in (cls, "all")]
+    scope = hashlib.md5(f"{wi}-{di}-{cls}".encode("utf-8")).hexdigest()[:10]
+    name_key = f"dlg_name_{scope}"
+    type_key = f"dlg_type_{scope}"
+    class_key = f"dlg_class_{scope}"
+    start_key = f"dlg_start_{scope}"
+    end_key = f"dlg_end_{scope}"
 
-    st.markdown(f"**{DAY_NAMES[di]} {day_date}**")
-
-    # ── Delete existing events ──
-    if vis:
-        for idx_ev, ev in enumerate(vis):
-            if st.button(
-                f"🗑 מחק: {ev['text']}", key=f"dlg_del_{idx_ev}",
-                use_container_width=True,
-            ):
-                all_cell.remove(ev)
-                save_schedule(school_id, data)
-                st.rerun()
-        st.divider()
-
-    # ── Add new event ──
-    nt = st.text_input("שם האירוע", placeholder="לדוגמה: מבחן")
-    tp = st.selectbox(
-        "סוג אירוע", list(STYLES.keys()),
-        format_func=lambda x: STYLES[x]["label"],
+    st.markdown('<div class="edit-modal-marker"></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="edit-modal-date-pill">{DAY_NAMES[di]} · {day_date}</div>',
+        unsafe_allow_html=True,
     )
-    ecls = st.selectbox("כיתה יעד", allowed_classes + ["all"])
+
+    nt = st.text_input("שם*", key=name_key, placeholder="מבחן")
+    type_col, class_col = st.columns([1.2, 1])
+    with type_col:
+        tp = st.selectbox(
+            "סוג*",
+            EVENT_TYPE_ORDER,
+            format_func=_event_type_label,
+            key=type_key,
+        )
+    with class_col:
+        ecls = st.selectbox("כיתה*", allowed_classes + ["all"], key=class_key)
 
     bagrut_start = ""
     bagrut_end = ""
     if tp == "bagrut":
         tcol1, tcol2 = st.columns(2)
         with tcol1:
-            bagrut_start = st.text_input("שעת התחלה", placeholder="09:00")
+            bagrut_start = st.text_input("התחלה*", key=start_key, placeholder="09:00")
         with tcol2:
-            bagrut_end = st.text_input("שעת סיום", placeholder="12:00")
+            bagrut_end = st.text_input("סיום*", key=end_key, placeholder="12:00")
 
-    if st.button("הוסף", type="primary", use_container_width=True):
-        if nt.strip():
-            if dk not in wk["days"]:
-                wk["days"][dk] = []
-            event_payload = {"text": nt.strip(), "type": tp, "class": ecls}
+    st.markdown(_event_button_theme_css("dlg_save_", tp), unsafe_allow_html=True)
+    cancel_col, save_col = st.columns([1, 1])
+    with cancel_col:
+        if st.button("סגור", key=f"dlg_cancel_{scope}", type="secondary", use_container_width=True):
+            st.rerun()
+    with save_col:
+        save_label = f'{STYLES.get(tp, STYLES["general"]).get("icon", "📌")} שמור'
+        if st.button(save_label, key=f"dlg_save_{scope}", type="primary", use_container_width=True):
+            clean_name = nt.strip()
+            if len(clean_name) < 2:
+                st.warning("שם קצר מדי")
+                return
+            if len(clean_name) > 40:
+                st.warning("שם ארוך מדי")
+                return
+
+            st_time = ""
+            en_time = ""
             if tp == "bagrut":
                 st_time = _normalize_exam_time(bagrut_start)
                 en_time = _normalize_exam_time(bagrut_end)
-                if st_time and en_time:
-                    event_payload["text"] = f"{nt.strip()} {st_time}-{en_time}"
-                elif st_time:
-                    event_payload["text"] = f"{nt.strip()} {st_time}"
+                if not st_time or not en_time:
+                    st.warning("יש להזין שעות תקינות")
+                    return
+                if en_time <= st_time:
+                    st.warning("שעת סיום חייבת להיות אחרי התחלה")
+                    return
+
+            if dk not in wk["days"]:
+                wk["days"][dk] = []
+            event_payload = {"text": clean_name, "type": tp, "class": ecls}
+            if tp == "bagrut":
+                event_payload["text"] = f"{clean_name} {st_time}-{en_time}"
                 event_payload["start_time"] = st_time
                 event_payload["end_time"] = en_time
             wk["days"][dk].append(event_payload)
             save_schedule(school_id, data)
+            st.session_state["ui_notice_text"] = "האירוע נשמר בהצלחה"
+            st.session_state["ui_notice_kind"] = "success"
             st.rerun()
 
 
@@ -1857,9 +2260,10 @@ def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list
 
     # ── Legend ──
     lg = "".join(
-        f'<span class="legend-chip" style="background:{s["bg"]};color:{s["fg"]};'
-        f'font-weight:{"700" if s["bold"] else "400"};">{s["label"]}</span>'
-        for s in STYLES.values()
+        f'<span class="legend-chip" style="background:{STYLES[k]["bg"]};color:{STYLES[k]["fg"]};'
+        f'border:1px solid {STYLES[k].get("border", "#CBD5E1")};'
+        f'font-weight:{"700" if STYLES[k]["bold"] else "400"};">{_event_type_label(k)}</span>'
+        for k in EVENT_TYPE_ORDER
     )
     lg += '<span class="legend-chip cal-parasha">פרשת השבוע</span>'
     st.markdown(f'<div class="legend-row">{lg}</div>', unsafe_allow_html=True)
@@ -1881,31 +2285,21 @@ def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list
             with rcols[di]:
                 day_date = get_day_date(wk.get("start_date", ""), di)
                 evs = [e for e in wk["days"].get(dk, []) if e.get("class") in (cls, "all")]
-
+                chips = "".join(chip_html(e) for e in evs)
+                if dk == "shabbat" and parasha:
+                    chips += f'<span class="cal-parasha">{parasha}</span>'
+                even = wi % 2 == 0
+                st.markdown(cell_html(day_date, chips, even), unsafe_allow_html=True)
                 if can_edit:
-                    # Build button label: date + event names
-                    lines = [day_date]
-                    for ev in evs:
-                        lines.append(ev["text"])
-                    if dk == "shabbat" and parasha:
-                        lines.append(parasha)
-                    btn_label = "\n".join(lines)
-
-                    if st.button(btn_label, key=f"sel_{wi}_{di}", use_container_width=True):
-                        st.session_state["_dlg_data"] = data
-                        st.session_state["_dlg_school_id"] = school_id
-                        st.session_state["_dlg_wi"] = wi
-                        st.session_state["_dlg_di"] = di
-                        st.session_state["_dlg_cls"] = cls
-                        st.session_state["_dlg_allowed_classes"] = auth_info["allowed_classes"]
-                        _edit_cell_dialog()
-                else:
-                    # Read-only: render styled cell
-                    chips = "".join(chip_html(e) for e in evs)
-                    if dk == "shabbat" and parasha:
-                        chips += f'<span class="cal-parasha">{parasha}</span>'
-                    even = wi % 2 == 0
-                    st.markdown(cell_html(day_date, chips, even), unsafe_allow_html=True)
+                    st.markdown('<div class="cell-edit-trigger-marker"></div>', unsafe_allow_html=True)
+                if can_edit and st.button(CELL_EDIT_TRIGGER_LABEL, key=f"sel_{wi}_{di}", use_container_width=False, type="tertiary"):
+                    st.session_state["_dlg_data"] = data
+                    st.session_state["_dlg_school_id"] = school_id
+                    st.session_state["_dlg_wi"] = wi
+                    st.session_state["_dlg_di"] = di
+                    st.session_state["_dlg_cls"] = cls
+                    st.session_state["_dlg_allowed_classes"] = auth_info["allowed_classes"]
+                    _edit_cell_dialog()
 
 
 # ===================================================================
@@ -1944,6 +2338,16 @@ def main():
 
     if not auth_info["authenticated"]:
         return
+
+    notice_text = st.session_state.pop("ui_notice_text", "")
+    notice_kind = st.session_state.pop("ui_notice_kind", "success")
+    if notice_text:
+        if notice_kind == "warning":
+            st.warning(notice_text)
+        elif notice_kind == "error":
+            st.error(notice_text)
+        else:
+            st.success(notice_text)
 
     # ── Public mode: read-only, no tabs ──
     if auth_info["is_public"]:
@@ -2009,13 +2413,12 @@ def main():
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Shared selector defaults (controls are rendered above the table in main column)
+    # Shared selector defaults
     class_options = allowed_classes if allowed_classes else data.get("classes", ["יא 1"])
     default_start, default_end = _compute_default_date_range(data)
-    panel_cls = st.session_state.get("class_select", class_options[0] if class_options else "יא 1")
 
     # ──────────────────────────────────────────
-    # LAYOUT: side buttons + main schedule
+    # LAYOUT: controls/export then side-management + table
     # ──────────────────────────────────────────
     if "open_panel" not in st.session_state:
         st.session_state["open_panel"] = None
@@ -2032,99 +2435,43 @@ def main():
             ("staff", "\U0001F465 ניהול צוות", "panel"),
         ]
 
-    if action_buttons:
-        col_main, col_side = st.columns([4, 1])
+    theme_by_action = {
+        "add_event": "general",
+        "ministry": "bagrut",
+        "holidays": "holiday",
+        "new_year": "vacation",
+        "add_class": "trip",
+        "staff": "magen",
+    }
+
+    # ── Controls + export above split layout ──
+    with st.container():
+        st.markdown('<div class="ctrl-row-marker"></div>', unsafe_allow_html=True)
+        ctrl1, ctrl2 = st.columns([1.2, 2.2])
+        with ctrl1:
+            cls = st.selectbox("כיתה", class_options, key="class_select", label_visibility="collapsed")
+        with ctrl2:
+            date_range = st.date_input(
+                "תאריכים",
+                value=(default_start, default_end),
+                key="date_range_filter",
+                label_visibility="collapsed",
+            )
+
+    if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+        range_start, range_end = date_range
+    elif isinstance(date_range, (list, tuple)) and len(date_range) == 1:
+        range_start = date_range[0]
+        range_end = default_end
     else:
-        col_main = st.container()
-        col_side = None
+        range_start = default_start
+        range_end = default_end
 
-    # ── Side buttons column ──
-    if col_side is not None:
-        with col_side:
-            with st.container():
-                st.markdown('<div class="side-actions-marker"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="side-actions-title">ניהול מהיר לפי צבע ואייקון</div>', unsafe_allow_html=True)
-                for key, label, action_kind in action_buttons:
-                    is_open = st.session_state["open_panel"] == key
-                    btn_type = "primary" if action_kind == "panel" and is_open else "secondary"
-                    if st.button(label, key=f"nav_{key}", use_container_width=True, type=btn_type):
-                        if action_kind == "action":
-                            st.session_state["open_panel"] = None
-                            _run_holidays_import(data, school_id)
-                        else:
-                            st.session_state["open_panel"] = None if is_open else key
-                            st.rerun()
+    filtered_weeks = _filter_weeks_by_range(data, range_start, range_end)
+    panel_cls = st.session_state.get("class_select", class_options[0] if class_options else "יא 1")
 
-            # ── Render open panel ──
-            panel = st.session_state["open_panel"]
-
-            if panel == "add_event" and is_director:
-                with st.container():
-                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="side-panel-heading">הוספת אירוע</div>', unsafe_allow_html=True)
-                    _sidebar_add_event_form(data, panel_cls, school_id, auth_info)
-
-            elif panel == "ministry" and is_director:
-                with st.container():
-                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="side-panel-heading">סנכרון בגרויות</div>', unsafe_allow_html=True)
-                    _sidebar_ministry_tools(data, panel_cls, school_id)
-
-            elif panel == "new_year" and is_director:
-                with st.container():
-                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="side-panel-heading">מעבר לשנה חדשה</div>', unsafe_allow_html=True)
-                    _sidebar_year_rollover(data, panel_cls, school_id)
-
-            elif panel == "add_class" and is_director:
-                with st.container():
-                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="side-panel-heading">כיתה חדשה</div>', unsafe_allow_html=True)
-                    nc = st.text_input("שם", key="nc", placeholder="יא 4")
-                    if st.button("הוסף כיתה", key="add_class_btn", type="primary", use_container_width=True):
-                        if nc.strip() and nc.strip() not in data.get("classes", []):
-                            add_class_to_school(school_id, nc.strip())
-                            data["classes"].append(nc.strip())
-                            save_schedule(school_id, data)
-                            st.toast(f"כיתה '{nc.strip()}' נוספה!")
-                            st.rerun()
-
-            elif panel == "staff" and is_director:
-                with st.container():
-                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="side-panel-heading">ניהול צוות</div>', unsafe_allow_html=True)
-                    page_manage_staff(auth_info)
-
-    # ── Main column: export row + schedule ──
-    with col_main:
-        # ── Controls row: class + date range (sticky above table) ──
+    if is_director or is_teacher:
         with st.container():
-            st.markdown('<div class="ctrl-row-marker"></div>', unsafe_allow_html=True)
-            ctrl1, ctrl2 = st.columns([1.2, 2.2])
-            with ctrl1:
-                cls = st.selectbox("כיתה", class_options, key="class_select", label_visibility="collapsed")
-            with ctrl2:
-                date_range = st.date_input(
-                    "תאריכים",
-                    value=(default_start, default_end),
-                    key="date_range_filter",
-                    label_visibility="collapsed",
-                )
-
-        if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-            range_start, range_end = date_range
-        elif isinstance(date_range, (list, tuple)) and len(date_range) == 1:
-            range_start = date_range[0]
-            range_end = default_end
-        else:
-            range_start = default_start
-            range_end = default_end
-
-        filtered_weeks = _filter_weeks_by_range(data, range_start, range_end)
-
-        # ── Compact export toolbar above the table ──
-        if is_director or is_teacher:
-          with st.container():
             st.markdown('<div class="export-bar-marker"></div>', unsafe_allow_html=True)
             exp_c1, exp_c2, exp_c3 = st.columns([1, 1, 1])
 
@@ -2189,9 +2536,75 @@ def main():
                         st.session_state["wa_png_bytes"] = png_result
                         st.rerun()
 
-        # ── Schedule table ──
-        render_scheduler(data, cls, auth_info, filtered_weeks)
+    # ── Split area: side management aligned with table level ──
+    if action_buttons:
+        col_side, col_main = st.columns([1.0, 4.4], gap="small")
+    else:
+        col_side = None
+        col_main = st.container()
 
+    # ── Side management buttons (same level as table) ──
+    if col_side is not None:
+        with col_side:
+            with st.container():
+                st.markdown('<div class="manage-side-marker"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="manage-side-title">ניהול מהיר לפי צבע ואייקון</div>', unsafe_allow_html=True)
+                for key, label, action_kind in action_buttons:
+                    st.markdown(
+                        _event_button_theme_css(f"nav_{key}", theme_by_action.get(key, "general")),
+                        unsafe_allow_html=True,
+                    )
+                    is_open = st.session_state["open_panel"] == key
+                    btn_type = "primary" if action_kind == "panel" and is_open else "secondary"
+                    if st.button(label, key=f"nav_{key}", use_container_width=True, type=btn_type):
+                        if action_kind == "action":
+                            st.session_state["open_panel"] = None
+                            _run_holidays_import(data, school_id)
+                        else:
+                            st.session_state["open_panel"] = None if is_open else key
+                            st.rerun()
+
+            panel = st.session_state["open_panel"]
+            if panel == "add_event" and is_director:
+                with st.container():
+                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
+                    st.markdown('<div class="side-panel-heading">הוספת אירוע</div>', unsafe_allow_html=True)
+                    _sidebar_add_event_form(data, panel_cls, school_id, auth_info)
+
+            elif panel == "ministry" and is_director:
+                with st.container():
+                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
+                    st.markdown('<div class="side-panel-heading">סנכרון בגרויות</div>', unsafe_allow_html=True)
+                    _sidebar_ministry_tools(data, panel_cls, school_id)
+
+            elif panel == "new_year" and is_director:
+                with st.container():
+                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
+                    st.markdown('<div class="side-panel-heading">מעבר לשנה חדשה</div>', unsafe_allow_html=True)
+                    _sidebar_year_rollover(data, panel_cls, school_id)
+
+            elif panel == "add_class" and is_director:
+                with st.container():
+                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
+                    st.markdown('<div class="side-panel-heading">כיתה חדשה</div>', unsafe_allow_html=True)
+                    nc = st.text_input("שם", key="nc", placeholder="יא 4")
+                    if st.button("הוסף כיתה", key="add_class_btn", type="primary", use_container_width=True):
+                        if nc.strip() and nc.strip() not in data.get("classes", []):
+                            add_class_to_school(school_id, nc.strip())
+                            data["classes"].append(nc.strip())
+                            save_schedule(school_id, data)
+                            st.toast(f"כיתה '{nc.strip()}' נוספה!")
+                            st.rerun()
+
+            elif panel == "staff" and is_director:
+                with st.container():
+                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
+                    st.markdown('<div class="side-panel-heading">ניהול צוות</div>', unsafe_allow_html=True)
+                    page_manage_staff(auth_info)
+
+    # ── Main column: schedule table ──
+    with col_main:
+        render_scheduler(data, cls, auth_info, filtered_weeks)
 
 if __name__ == "__main__":
     main()
