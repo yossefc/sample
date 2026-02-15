@@ -414,42 +414,61 @@ button[data-testid="stSidebarCollapsedControl"] { display: none !important; }
 /* ── Top bar ── */
 .top-bar {
     display: flex; align-items: center; justify-content: space-between;
-    background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 54%, #38BDF8 100%);
-    border-radius: 14px; padding: 14px 24px;
-    box-shadow: 0 8px 24px rgba(30, 58, 138, 0.22);
+    background: linear-gradient(130deg, #1E3A8A 0%, #2563EB 45%, #0EA5E9 100%);
+    border: 1px solid rgba(255,255,255,0.26);
+    border-radius: 18px; padding: 15px 24px;
+    box-shadow: 0 16px 30px rgba(30, 58, 138, 0.24);
     margin-bottom: 10px; gap: 16px; flex-wrap: wrap;
     color: #fff;
+    position: relative;
+    overflow: hidden;
+}
+.top-bar::after {
+    content: "";
+    position: absolute;
+    inset: -30% auto auto -12%;
+    width: 45%;
+    height: 130%;
+    background: radial-gradient(circle, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.0) 70%);
+    pointer-events: none;
 }
 .top-bar-user {
-    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 11px; flex-shrink: 0;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 14px;
+    padding: 8px 10px;
+    backdrop-filter: blur(4px);
 }
 .top-bar-avatar {
-    width: 40px; height: 40px; border-radius: 50%;
-    background: rgba(255,255,255,0.2);
+    width: 44px; height: 44px; border-radius: 50%;
+    background: linear-gradient(160deg, rgba(255,255,255,0.35), rgba(255,255,255,0.15));
     backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-    border: 2px solid rgba(255,255,255,0.35);
+    border: 2px solid rgba(255,255,255,0.48);
     color: #fff; display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 1rem; flex-shrink: 0;
+    font-weight: 800; font-size: 1.02rem; flex-shrink: 0;
 }
-.top-bar-name { font-weight: 700; font-size: 0.88rem; color: #fff; }
-.top-bar-email { font-size: 0.72rem; color: rgba(255,255,255,0.7); }
+.top-bar-name { font-weight: 800; font-size: 0.92rem; color: #fff; }
+.top-bar-email { font-size: 0.73rem; color: rgba(255,255,255,0.84); }
 .top-bar-role {
-    font-size: 0.62rem; font-weight: 700; padding: 2px 10px;
-    border-radius: 10px; display: inline-block; margin-top: 2px;
+    font-size: 0.64rem; font-weight: 800; padding: 3px 10px;
+    border-radius: 999px; display: inline-block; margin-top: 2px;
+    letter-spacing: 0.01em;
 }
-.top-bar-role.director { background: rgba(255,255,255,0.2); color: #fff; }
-.top-bar-role.teacher  { background: rgba(255,255,255,0.15); color: #C8E6C9; }
+.top-bar-role.director { background: rgba(253, 230, 138, 0.28); color: #FEF3C7; border: 1px solid rgba(254, 243, 199, 0.38); }
+.top-bar-role.teacher  { background: rgba(134, 239, 172, 0.24); color: #DCFCE7; border: 1px solid rgba(220, 252, 231, 0.34); }
 .top-bar-title {
     text-align: center; flex: 1;
 }
 .top-bar-title h2 {
-    font-weight: 900; font-size: 1.5rem; color: #fff;
+    font-weight: 900; font-size: clamp(1.45rem, 2.1vw, 1.9rem); color: #fff;
     font-family: 'Assistant', 'Rubik', sans-serif;
-    margin: 0; line-height: 1.15; letter-spacing: 0.01em;
+    margin: 0; line-height: 1.12; letter-spacing: 0.01em;
+    text-shadow: 0 2px 14px rgba(30,58,138,0.35);
 }
 .top-bar-title p {
-    font-size: 0.82rem; color: rgba(255,255,255,0.7);
-    margin: 2px 0 0; font-weight: 500;
+    font-size: 0.84rem; color: rgba(255,255,255,0.86);
+    margin: 4px 0 0; font-weight: 600;
 }
 
 /* ── Controls row (class + date) ── */
@@ -508,33 +527,72 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > 
 
 /* ── Export toolbar ── */
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .export-bar-marker) {
-    background: linear-gradient(180deg, #FFFFFF 0%, #FFFDF3 100%);
-    border: 1px solid #E7D9A7;
-    border-radius: 12px;
-    padding: 6px 10px 2px;
-    margin-bottom: 6px;
+    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFF 100%);
+    border: 1px solid #CEDCFB;
+    border-radius: 14px;
+    padding: 10px 12px 6px;
+    margin-bottom: 8px;
+    box-shadow: 0 8px 16px rgba(30, 58, 138, 0.08);
+}
+.export-top-title {
+    font-size: 0.84rem;
+    font-weight: 800;
+    color: #1E3A8A;
+    margin: 0 2px 10px;
+    letter-spacing: 0.01em;
+}
+div[data-testid="stVerticalBlock"]:has(.export-bar-marker) > div[data-testid="stHorizontalBlock"] {
+    gap: 0.52rem !important;
 }
 div[data-testid="stVerticalBlock"]:has(.export-bar-marker) .stDownloadButton > button,
 div[data-testid="stVerticalBlock"]:has(.export-bar-marker) .stButton > button {
-    font-size: 0.76rem !important; padding: 5px 10px !important;
-    border-radius: 6px !important; font-weight: 600 !important;
-    min-height: 34px !important;
+    font-size: 0.91rem !important; padding: 10px 12px !important;
+    border-radius: 13px !important; font-weight: 800 !important;
+    min-height: 50px !important;
+    border: 1px solid #CBD5E1 !important;
+    color: #1F2937 !important;
+    background: #FFFFFF !important;
+    box-shadow: 0 8px 16px rgba(30,58,138,0.12) !important;
+    letter-spacing: 0.01em !important;
 }
 div[data-testid="stVerticalBlock"]:has(.export-bar-marker) div[data-testid="stPopover"] button {
-    font-size: 0.76rem !important; padding: 5px 10px !important;
-    height: 34px !important; min-height: 0 !important;
-    line-height: normal !important; border-radius: 6px !important;
-    background: var(--ds-surface) !important; border: 1px solid var(--ds-border) !important;
-    color: var(--ds-text) !important; font-weight: 600 !important;
+    font-size: 0.91rem !important; padding: 10px 12px !important;
+    height: 50px !important; min-height: 0 !important;
+    line-height: normal !important; border-radius: 13px !important;
+    color: #1F2937 !important; font-weight: 800 !important;
+    border: 1px solid #CBD5E1 !important;
+    background: #FFFFFF !important;
+    box-shadow: 0 8px 16px rgba(30,58,138,0.12) !important;
 }
 div[data-testid="stVerticalBlock"]:has(.export-bar-marker) > div[data-testid="stHorizontalBlock"] > div:nth-child(1) div[data-testid="stPopover"] button {
-    background: #EEF2FF !important; border-color: #A5B4FC !important; color: #3730A3 !important;
+    background: linear-gradient(135deg, #6366F1, #4F46E5) !important;
+    color: #FFFFFF !important;
+    border: none !important;
 }
+div[data-testid="stButton"] > button[id^="top_download_excel"],
 div[data-testid="stVerticalBlock"]:has(.export-bar-marker) > div[data-testid="stHorizontalBlock"] > div:nth-child(2) .stDownloadButton > button {
-    background: #ECFDF3 !important; border-color: #86EFAC !important; color: #166534 !important;
+    background: linear-gradient(135deg, #22C55E, #16A34A) !important;
+    color: #FFFFFF !important;
+    border: none !important;
 }
+div[data-testid="stButton"] > button[id^="top_gen_png"],
+div[data-testid="stButton"] > button[id^="top_download_png"],
 div[data-testid="stVerticalBlock"]:has(.export-bar-marker) > div[data-testid="stHorizontalBlock"] > div:nth-child(3) .stDownloadButton > button {
-    background: #FFF7ED !important; border-color: #FDBA74 !important; color: #9A3412 !important;
+    background: linear-gradient(135deg, #F59E0B, #EA580C) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+}
+div[data-testid="stVerticalBlock"]:has(.export-bar-marker) .stDownloadButton > button:hover,
+div[data-testid="stVerticalBlock"]:has(.export-bar-marker) .stButton > button:hover,
+div[data-testid="stVerticalBlock"]:has(.export-bar-marker) div[data-testid="stPopover"] button:hover {
+    filter: brightness(1.06) saturate(1.03) !important;
+    transform: translateY(-1px) !important;
+}
+div[data-testid="stVerticalBlock"]:has(.export-bar-marker) .stDownloadButton > button:focus-visible,
+div[data-testid="stVerticalBlock"]:has(.export-bar-marker) .stButton > button:focus-visible,
+div[data-testid="stVerticalBlock"]:has(.export-bar-marker) div[data-testid="stPopover"] button:focus-visible {
+    outline: 2px solid #93C5FD !important;
+    outline-offset: 1px !important;
 }
 
 /* ── Tabs ── */
@@ -722,16 +780,17 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > 
     top: 10px;
 }
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-side-marker) .stButton > button {
-    min-height: 42px !important;
+    min-height: 52px !important;
     border-radius: 12px !important;
-    font-size: 0.82rem !important;
+    font-size: 0.94rem !important;
     font-weight: 800 !important;
-    padding-inline: 9px !important;
+    padding-inline: 12px !important;
     margin-bottom: 0.22rem;
+    letter-spacing: 0.01em !important;
 }
 div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-side-marker) .stButton > button p {
     white-space: normal !important;
-    line-height: 1.12 !important;
+    line-height: 1.2 !important;
 }
 .manage-side-title {
     font-size: 0.82rem;
@@ -752,8 +811,8 @@ div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > 
         white-space: normal !important;
     }
     div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-side-marker) .stButton > button {
-        min-height: 39px !important;
-        font-size: 0.77rem !important;
+        min-height: 46px !important;
+        font-size: 0.84rem !important;
     }
     div[data-testid="stVerticalBlock"]:has(> div[data-testid="element-container"] > div[data-testid="stMarkdown"] .manage-side-marker) {
         margin-top: 220px;
@@ -1448,8 +1507,8 @@ def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
             png_bytes = page.screenshot(full_page=True, type="png")
             browser.close()
         return png_bytes
-    except Exception:
-        return full_html.encode("utf-8")
+    except Exception as ex:
+        raise RuntimeError(f"PNG export failed: {ex}") from ex
 
 
 # ===================================================================
@@ -1860,13 +1919,19 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
                         st.error(ch["conflict"])
                 st.rerun()
 
-    search_query = st.text_input(
-        "חיפוש",
-        key="ministry_text_search",
-        placeholder="מקצוע / סמל...",
-    )
-    if search_query.strip():
-        results = search_ministry_exams(search_query)
+    with st.form("ministry_search_form", clear_on_submit=False):
+        search_query = st.text_input(
+            "חיפוש",
+            key="ministry_text_search",
+            placeholder="מקצוע / סמל...",
+        )
+        search_submit = st.form_submit_button("חפש", use_container_width=True)
+    if search_submit:
+        st.session_state["ministry_confirmed_search"] = search_query.strip()
+
+    confirmed_query = (st.session_state.get("ministry_confirmed_search") or "").strip()
+    if confirmed_query:
+        results = search_ministry_exams(confirmed_query)
         if results:
             st.caption(f"{len(results)} תוצאות")
             for exam in results:
@@ -2073,32 +2138,24 @@ def render_export_tab(data: dict, cls: str, filtered_weeks: list):
         png_ready = (st.session_state["wa_png_cache_key"] == cache_key and png_image is not None)
 
         if png_ready:
-            is_png = isinstance(png_image, bytes) and len(png_image) > 4 and png_image[:4] == b'\x89PNG'
-            if is_png:
-                st.download_button(
-                    "&#128248;  הורד תמונה PNG",
-                    data=png_image,
-                    file_name=f"לוח_{cls}.png",
-                    mime="image/png",
-                    key="download_png_tab",
-                    use_container_width=True,
-                )
-            else:
-                st.download_button(
-                    "&#128248;  הורד תמונה (HTML)",
-                    data=png_image,
-                    file_name=f"לוח_{cls}.html",
-                    mime="text/html",
-                    key="download_html_tab",
-                    use_container_width=True,
-                )
+            st.download_button(
+                "&#128248;  הורד תמונה PNG",
+                data=png_image,
+                file_name=f"לוח_{cls}.png",
+                mime="image/png",
+                key="download_png_tab",
+                use_container_width=True,
+            )
         else:
             if st.button("&#128248;  צור תמונה PNG", key="gen_png_tab", use_container_width=True):
-                with st.spinner("יוצר תמונה..."):
-                    png_result = schedule_to_png(data, cls, filtered_weeks)
-                st.session_state["wa_png_cache_key"] = cache_key
-                st.session_state["wa_png_bytes"] = png_result
-                st.rerun()
+                try:
+                    with st.spinner("יוצר תמונה..."):
+                        png_result = schedule_to_png(data, cls, filtered_weeks)
+                    st.session_state["wa_png_cache_key"] = cache_key
+                    st.session_state["wa_png_bytes"] = png_result
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"שגיאה ביצירת PNG: {ex}")
 
 
 # ===================================================================
@@ -2473,14 +2530,15 @@ def main():
     if is_director or is_teacher:
         with st.container():
             st.markdown('<div class="export-bar-marker"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="export-top-title">שיתוף וייצוא מהיר</div>', unsafe_allow_html=True)
             exp_c1, exp_c2, exp_c3 = st.columns([1, 1, 1])
 
             # 1) Copy share link (using popover with st.code for native copy)
             with exp_c1:
-                with st.popover("\U0001F517 העתק קישור", use_container_width=True):
+                with st.popover("\U0001F517 קישור הורים", use_container_width=True):
                     detected_url = _get_base_url()
                     share_url = f"{detected_url}?school_id={urllib.parse.quote(school_id)}&class={urllib.parse.quote(cls)}&mode=view"
-                    st.caption("לחץ על הכפתור להעתקה:")
+                    st.caption("לחיצה מעתיקה את הקישור:")
                     st.code(share_url, language=None)
 
             # 2) Download Excel
@@ -2490,7 +2548,7 @@ def main():
                     st.session_state["xl_cache_key"] = xl_cache_key
                     st.session_state["xl_bytes"] = to_excel(data, cls)
                 st.download_button(
-                    "\U0001F4CA הורד Excel",
+                    "\U0001F4CA קובץ Excel",
                     data=st.session_state["xl_bytes"],
                     file_name=f"לוח_{cls}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.document",
@@ -2509,32 +2567,24 @@ def main():
                 png_ready = (st.session_state["wa_png_cache_key"] == cache_key and png_image is not None)
 
                 if png_ready:
-                    is_png = isinstance(png_image, bytes) and len(png_image) > 4 and png_image[:4] == b'\x89PNG'
-                    if is_png:
-                        st.download_button(
-                            "\U0001F5BC\uFE0F הורד תמונה",
-                            data=png_image,
-                            file_name=f"לוח_{cls}.png",
-                            mime="image/png",
-                            key="top_download_png",
-                            use_container_width=True,
-                        )
-                    else:
-                        st.download_button(
-                            "\U0001F5BC\uFE0F הורד תמונה (HTML)",
-                            data=png_image,
-                            file_name=f"לוח_{cls}.html",
-                            mime="text/html",
-                            key="top_download_html",
-                            use_container_width=True,
-                        )
+                    st.download_button(
+                        "\U0001F5BC\uFE0F הורדת תמונה",
+                        data=png_image,
+                        file_name=f"לוח_{cls}.png",
+                        mime="image/png",
+                        key="top_download_png",
+                        use_container_width=True,
+                    )
                 else:
-                    if st.button("\U0001F5BC\uFE0F צור תמונה", key="top_gen_png", use_container_width=True):
-                        with st.spinner("\U0001F5BC\uFE0F יוצר תמונה..."):
-                            png_result = schedule_to_png(data, cls, filtered_weeks)
-                        st.session_state["wa_png_cache_key"] = cache_key
-                        st.session_state["wa_png_bytes"] = png_result
-                        st.rerun()
+                    if st.button("\U0001F3A8 צור תמונה", key="top_gen_png", use_container_width=True):
+                        try:
+                            with st.spinner("\U0001F5BC\uFE0F יוצר תמונה..."):
+                                png_result = schedule_to_png(data, cls, filtered_weeks)
+                            st.session_state["wa_png_cache_key"] = cache_key
+                            st.session_state["wa_png_bytes"] = png_result
+                            st.rerun()
+                        except Exception as ex:
+                            st.error(f"שגיאה ביצירת PNG: {ex}")
 
     # ── Split area: side management aligned with table level ──
     if action_buttons:
