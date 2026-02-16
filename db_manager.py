@@ -541,21 +541,39 @@ def get_schedule(school_id: str) -> dict:
     }
 
 
-def save_schedule(school_id: str, schedule_data: dict):
-    """Save the full schedule (weeks + metadata)."""
+def save_schedule(school_id: str, schedule_data: dict, include_school_meta: bool = True):
+    """Save schedule data.
+
+    Args:
+        include_school_meta:
+            True  -> persist classes/year/parasha + weeks
+            False -> persist weeks only (faster for frequent cell/event edits)
+    """
     # Clear cached schedule so next read picks up fresh data
     get_schedule.clear()
     db = _get_db()
     school_ref = db.collection("schools").document(school_id)
-    school_ref.update({
-        "classes": schedule_data.get("classes", []),
-        "year": schedule_data.get("year", ""),
-        "parashat_hashavua": schedule_data.get("parashat_hashavua", {}),
-    })
-    # Weeks stored in sub-doc to avoid 1MB doc limit
-    school_ref.collection("schedule_meta").document("weeks").set({
-        "weeks": schedule_data.get("weeks", []),
-    })
+    weeks_ref = school_ref.collection("schedule_meta").document("weeks")
+
+    # Single commit to reduce round-trips on each save.
+    batch = db.batch()
+    if include_school_meta:
+        batch.set(
+            school_ref,
+            {
+                "classes": schedule_data.get("classes", []),
+                "year": schedule_data.get("year", ""),
+                "parashat_hashavua": schedule_data.get("parashat_hashavua", {}),
+            },
+            merge=True,
+        )
+    batch.set(
+        weeks_ref,
+        {
+            "weeks": schedule_data.get("weeks", []),
+        },
+    )
+    batch.commit()
 
 
 # ===================================================================

@@ -118,6 +118,7 @@ def _can_use_browser_auth() -> bool:
 
 _AUTH_SESSION_FILE = Path(__file__).parent / ".auth_sessions.json"
 _AUTH_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
+_AUTH_BROWSER_SYNC_INTERVAL_SECONDS = 120
 
 
 def _now_ts() -> int:
@@ -770,12 +771,17 @@ def authenticate() -> dict:
         email = st.session_state["auth_email"]
         name = st.session_state.get("auth_name", email)
 
-        # Silent browser-auth sync: fetch refresh token/sid if available.
+        # Silent browser-auth sync can be expensive if done on every rerun.
+        # Throttle it to keep event confirmations responsive.
         if _can_use_browser_auth():
-            sync_payload = _render_browser_auth_widget(action="auth", height=1, key="firebase_auth_sync")
-            _consume_browser_auth_payload(sync_payload)
-            email = st.session_state.get("auth_email", email)
-            name = st.session_state.get("auth_name", name)
+            now_ts = _now_ts()
+            last_sync_ts = int(st.session_state.get("auth_browser_sync_ts", 0) or 0)
+            if (now_ts - last_sync_ts) >= _AUTH_BROWSER_SYNC_INTERVAL_SECONDS:
+                sync_payload = _render_browser_auth_widget(action="auth", height=1, key="firebase_auth_sync")
+                _consume_browser_auth_payload(sync_payload)
+                st.session_state["auth_browser_sync_ts"] = now_ts
+                email = st.session_state.get("auth_email", email)
+                name = st.session_state.get("auth_name", name)
 
         _persist_login_session(email, name, st.session_state.get("auth_refresh_token", ""))
         result["authenticated"] = True

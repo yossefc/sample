@@ -20,6 +20,10 @@ from datetime import datetime, timedelta
 
 import requests
 import streamlit as st
+try:
+    from convertdate import hebrew as hebrew_calendar
+except Exception:
+    hebrew_calendar = None
 
 from auth_manager import authenticate
 from db_manager import (
@@ -86,6 +90,23 @@ MONTH_NAMES_HEB = {
     1: "ינואר", 2: "פברואר", 3: "מרץ", 4: "אפריל",
     5: "מאי", 6: "יוני", 7: "יולי", 8: "אוגוסט",
     9: "ספטמבר", 10: "אוקטובר", 11: "נובמבר", 12: "דצמבר",
+}
+
+# Hebrew calendar months (convertdate numbering: Nissan=1 ... Adar II=13)
+HEBREW_CAL_MONTHS = {
+    1: "ניסן",
+    2: "אייר",
+    3: "סיוון",
+    4: "תמוז",
+    5: "אב",
+    6: "אלול",
+    7: "תשרי",
+    8: "חשוון",
+    9: "כסלו",
+    10: "טבת",
+    11: "שבט",
+    12: "אדר",
+    13: "אדר ב׳",
 }
 
 
@@ -967,6 +988,34 @@ def get_day_date(start_date_str: str, day_index: int) -> str:
         return ""
 
 
+def _to_hebrew_calendar_label(gdate: datetime) -> str:
+    """Return compact Hebrew calendar label, e.g. '23 שבט'."""
+    if hebrew_calendar is None:
+        return ""
+    try:
+        hy, hm, hd = hebrew_calendar.from_gregorian(gdate.year, gdate.month, gdate.day)
+        month_name = HEBREW_CAL_MONTHS.get(hm, "")
+        if hm == 12 and hebrew_calendar.leap(hy):
+            month_name = "אדר א׳"
+        if not month_name:
+            return ""
+        return f"{hd} {month_name}"
+    except Exception:
+        return ""
+
+
+def get_day_date_label(start_date_str: str, day_index: int) -> str:
+    """Return Gregorian + Hebrew date label for UI cells."""
+    try:
+        sd = datetime.strptime(start_date_str, "%Y-%m-%d")
+        d = sd + timedelta(days=day_index)
+        greg = d.strftime("%d/%m")
+        heb = _to_hebrew_calendar_label(d)
+        return f"{greg} · {heb}" if heb else greg
+    except Exception:
+        return get_day_date(start_date_str, day_index)
+
+
 def get_full_date(start_date_str: str, day_index: int):
     try:
         sd = datetime.strptime(start_date_str, "%Y-%m-%d")
@@ -1444,7 +1493,7 @@ def _build_schedule_html(data: dict, cls: str, filtered_weeks: list) -> str:
         parasha = pm.get(wk["start_date"], "")
         html_parts.append('<tr>')
         for di, dk in enumerate(DAY_KEYS):
-            day_date = get_day_date(wk.get("start_date", ""), di)
+            day_date = get_day_date_label(wk.get("start_date", ""), di)
             evs = [e for e in wk["days"].get(dk, []) if e.get("class") in (cls, "all")]
             bg_color = "#FFFFFF" if wi % 2 else "#F8F9FA"
             if evs:
@@ -1490,7 +1539,7 @@ def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
                 browser.close()
         except Exception:
             subprocess.run(
-                ["playwright", "install", "chromium"],
+                [sys.executable, "-m", "playwright", "install", "chromium"],
                 check=True,
                 capture_output=True,
                 timeout=120,
@@ -1508,6 +1557,12 @@ def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
             browser.close()
         return png_bytes
     except Exception as ex:
+        ex_msg = str(ex)
+        if "error while loading shared libraries" in ex_msg or "libnspr4.so" in ex_msg:
+            raise RuntimeError(
+                "PNG export failed: missing Linux Chromium dependencies on server "
+                "(libnspr4/libnss3 etc). Install packages.txt deps and redeploy."
+            ) from ex
         raise RuntimeError(f"PNG export failed: {ex}") from ex
 
 
@@ -1525,7 +1580,7 @@ def build_whatsapp_text(data: dict, cls: str, filtered_weeks: list) -> str:
         if parasha:
             week_lines.append(f"  פרשת {parasha}")
         for di, dk in enumerate(DAY_KEYS):
-            day_date = get_day_date(wk.get("start_date", ""), di)
+            day_date = get_day_date_label(wk.get("start_date", ""), di)
             evs = [e for e in wk["days"].get(dk, []) if e.get("class") in (cls, "all")]
             if evs:
                 week_has_events = True
@@ -1883,7 +1938,7 @@ def _sidebar_add_event_form(data: dict, cls: str, school_id: str, auth_info: dic
             event_payload["start_time"] = st_time
             event_payload["end_time"] = en_time
         data["weeks"][wi]["days"].setdefault(dk, []).append(event_payload)
-        save_schedule(school_id, data)
+        save_schedule(school_id, data, include_school_meta=False)
         st.toast("אירוע נוסף!")
         st.rerun()
 
@@ -1912,7 +1967,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
             if not changes:
                 st.success("הכל מעודכן!")
             else:
-                save_schedule(school_id, data)
+                save_schedule(school_id, data, include_school_meta=False)
                 for ch in changes:
                     st.markdown(f"- **{ch['name']}** ({ch['code']}): {ch['old_date']} -> {ch['new_date']}")
                     if ch["conflict"]:
@@ -1939,7 +1994,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
                 if st.button(f"ייבא", key=f"import_search_{exam['code']}", use_container_width=True):
                     success, msg = import_exam_to_schedule(data, exam, cls)
                     if success:
-                        save_schedule(school_id, data)
+                        save_schedule(school_id, data, include_school_meta=False)
                         st.toast(msg if msg else f"יובא: {exam['name']}")
                         st.rerun()
                     else:
@@ -1962,7 +2017,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
                     if st.button("ייבא ללוח", key=f"import_{exam['code']}", type="primary", use_container_width=True):
                         success, msg = import_exam_to_schedule(data, exam, cls)
                         if success:
-                            save_schedule(school_id, data)
+                            save_schedule(school_id, data, include_school_meta=False)
                             st.toast(msg if msg else f"יובא: {exam['name']}")
                             st.rerun()
                         else:
@@ -2022,7 +2077,7 @@ def _run_holidays_import(data: dict, school_id: str):
                         added_count += 1
                 d += timedelta(days=1)
     if added_count > 0:
-        save_schedule(school_id, data)
+        save_schedule(school_id, data, include_school_meta=False)
         st.toast(f"יובאו {added_count} אירועים!")
         st.rerun()
     else:
@@ -2218,7 +2273,7 @@ def _edit_cell_dialog():
 
     dk = DAY_KEYS[di]
     wk = data["weeks"][wi]
-    day_date = get_day_date(wk.get("start_date", ""), di)
+    day_date = get_day_date_label(wk.get("start_date", ""), di)
     scope = hashlib.md5(f"{wi}-{di}-{cls}".encode("utf-8")).hexdigest()[:10]
     name_key = f"dlg_name_{scope}"
     type_key = f"dlg_type_{scope}"
@@ -2289,7 +2344,7 @@ def _edit_cell_dialog():
                 event_payload["start_time"] = st_time
                 event_payload["end_time"] = en_time
             wk["days"][dk].append(event_payload)
-            save_schedule(school_id, data)
+            save_schedule(school_id, data, include_school_meta=False)
             st.session_state["ui_notice_text"] = "האירוע נשמר בהצלחה"
             st.session_state["ui_notice_kind"] = "success"
             st.rerun()
@@ -2340,7 +2395,7 @@ def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list
 
         for di, dk in enumerate(DAY_KEYS):
             with rcols[di]:
-                day_date = get_day_date(wk.get("start_date", ""), di)
+                day_date = get_day_date_label(wk.get("start_date", ""), di)
                 evs = [e for e in wk["days"].get(dk, []) if e.get("class") in (cls, "all")]
                 chips = "".join(chip_html(e) for e in evs)
                 if dk == "shabbat" and parasha:
@@ -2658,3 +2713,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
