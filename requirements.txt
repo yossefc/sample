@@ -3,5 +3,6 @@ pandas>=2.0.0
 openpyxl>=3.1.0
 requests>=2.28.0
 firebase-admin>=6.4.0
-playwright>=1.40.0
+Pillow>=10.0.0
 convertdate>=2.4.0
+python-bidi>=0.4.2

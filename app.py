@@ -1516,54 +1516,200 @@ def _build_schedule_html(data: dict, cls: str, filtered_weeks: list) -> str:
     return "".join(html_parts)
 
 
-def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
-    """Render the schedule as a high-resolution PNG image using Playwright."""
-    full_html = _build_schedule_html(data, cls, filtered_weeks)
+def _contains_hebrew(text: str) -> bool:
+    return bool(re.search(r"[\u0590-\u05FF]", str(text or "")))
 
+
+def _rtl_text(text: str) -> str:
+    raw = str(text or "")
+    if not raw:
+        return ""
     try:
-        import asyncio
-        import subprocess
-        import sys
+        from bidi.algorithm import get_display
 
-        # Windows requires ProactorEventLoop for subprocess support.
-        # Streamlit's event loop doesn't set this, so Playwright crashes
-        # with NotImplementedError on asyncio.create_subprocess_exec.
-        if sys.platform == "win32":
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        return get_display(raw)
+    except Exception:
+        return raw[::-1] if _contains_hebrew(raw) else raw
 
-        from playwright.sync_api import sync_playwright
 
+def _load_export_font(size: int, bold: bool = False):
+    from PIL import ImageFont
+
+    candidates = []
+    if bold:
+        candidates.extend(
+            [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+                "C:\\Windows\\Fonts\\arialbd.ttf",
+            ]
+        )
+    candidates.extend(
+        [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "C:\\Windows\\Fonts\\arial.ttf",
+        ]
+    )
+
+    for path in candidates:
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                browser.close()
+            return ImageFont.truetype(path, size=size)
         except Exception:
-            subprocess.run(
-                [sys.executable, "-m", "playwright", "install", "chromium"],
-                check=True,
-                capture_output=True,
-                timeout=120,
-            )
+            continue
+    return ImageFont.load_default()
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page(
-                viewport={"width": 1200, "height": 800},
-                device_scale_factor=2,
-            )
-            page.set_content(full_html, wait_until="networkidle")
-            page.wait_for_timeout(1500)
-            png_bytes = page.screenshot(full_page=True, type="png")
-            browser.close()
-        return png_bytes
+
+def _text_width(draw, text: str, font) -> float:
+    try:
+        return float(draw.textlength(text, font=font))
+    except Exception:
+        box = draw.textbbox((0, 0), text, font=font)
+        return float(box[2] - box[0])
+
+
+def _wrap_for_width(draw, text: str, font, max_width: int, max_lines: int = 2) -> list[str]:
+    clean = " ".join(str(text or "").split())
+    if not clean:
+        return []
+
+    words = clean.split(" ")
+    lines = []
+    current = ""
+    consumed = 0
+
+    for idx, word in enumerate(words):
+        candidate = (current + " " + word).strip()
+        candidate_rtl = _rtl_text(candidate)
+        if current and _text_width(draw, candidate_rtl, font) > max_width:
+            lines.append(current)
+            current = word
+            if len(lines) >= max_lines:
+                consumed = idx
+                break
+        else:
+            current = candidate
+        consumed = idx + 1
+
+    if current and len(lines) < max_lines:
+        lines.append(current)
+
+    truncated = consumed < len(words)
+    if truncated and lines:
+        lines[-1] = f"{lines[-1]}…"
+    return lines[:max_lines]
+
+
+def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
+    """Render schedule PNG without external browser dependencies."""
+    try:
+        from PIL import Image, ImageDraw
     except Exception as ex:
-        ex_msg = str(ex)
-        if "error while loading shared libraries" in ex_msg or "libnspr4.so" in ex_msg:
-            raise RuntimeError(
-                "PNG export failed: missing Linux Chromium dependencies on server "
-                "(libnspr4/libnss3 etc). Install packages.txt deps and redeploy."
-            ) from ex
-        raise RuntimeError(f"PNG export failed: {ex}") from ex
+        raise RuntimeError("PNG export failed: Pillow is missing") from ex
+
+    rows = len(filtered_weeks)
+    if rows <= 0:
+        img = Image.new("RGB", (1000, 220), "#FFFFFF")
+        draw = ImageDraw.Draw(img)
+        title_font = _load_export_font(28, bold=True)
+        draw.text((60, 90), _rtl_text("אין נתונים להצגה"), fill="#1A237E", font=title_font)
+        out = io.BytesIO()
+        img.save(out, format="PNG")
+        return out.getvalue()
+
+    margin = 20
+    title_h = 64
+    header_h = 46
+    col_w = 210
+    cell_h = 130
+    cols = 7
+
+    width = margin * 2 + col_w * cols
+    height = margin * 2 + title_h + header_h + rows * cell_h
+    img = Image.new("RGB", (width, height), "#FFFFFF")
+    draw = ImageDraw.Draw(img)
+
+    title_font = _load_export_font(30, bold=True)
+    day_font = _load_export_font(23, bold=True)
+    date_font = _load_export_font(16, bold=False)
+    event_font = _load_export_font(18, bold=False)
+    event_bold_font = _load_export_font(18, bold=True)
+    parasha_font = _load_export_font(17, bold=True)
+
+    title = _rtl_text(f'לוח מבחנים {data.get("year", "")} - {cls}')
+    t_w = _text_width(draw, title, title_font)
+    draw.text(((width - t_w) / 2, margin + 8), title, fill="#1A237E", font=title_font)
+
+    table_top = margin + title_h
+    for i, day_name in enumerate(DAY_NAMES):
+        x0 = margin + i * col_w
+        y0 = table_top
+        draw.rectangle([x0, y0, x0 + col_w - 1, y0 + header_h - 1], fill="#1A237E", outline="#1A237E")
+        lbl = _rtl_text(day_name)
+        lbl_w = _text_width(draw, lbl, day_font)
+        draw.text((x0 + (col_w - lbl_w) / 2, y0 + 9), lbl, fill="#FFFFFF", font=day_font)
+
+    parasha_map = data.get("parashat_hashavua", {})
+    for row_idx, (wi, wk) in enumerate(filtered_weeks):
+        row_y = table_top + header_h + row_idx * cell_h
+        parasha = str(parasha_map.get(wk.get("start_date", ""), "") or "")
+
+        for di, dk in enumerate(DAY_KEYS):
+            x0 = margin + di * col_w
+            x1 = x0 + col_w - 1
+            y0 = row_y
+            y1 = row_y + cell_h - 1
+
+            evs = [e for e in wk["days"].get(dk, []) if e.get("class") in (cls, "all")]
+            bg_color = "#FFFFFF" if wi % 2 else "#F8F9FA"
+            if evs:
+                priority = ["bagrut", "magen", "trip", "vacation", "holiday"]
+                dominant = next((x for x in priority if any(e.get("type") == x for e in evs)), "general")
+                bg_color = STYLES.get(dominant, STYLES["general"]).get("bg", "#FFFFFF")
+
+            draw.rectangle([x0, y0, x1, y1], fill=bg_color, outline="#DEE2E6")
+
+            day_date = _rtl_text(get_day_date_label(wk.get("start_date", ""), di))
+            date_w = _text_width(draw, day_date, date_font)
+            draw.text((x0 + (col_w - date_w) / 2, y0 + 8), day_date, fill="#90A4AE", font=date_font)
+
+            max_text_w = col_w - 14
+            y_text = y0 + 32
+            line_h = 20
+            max_lines = max(2, (cell_h - 40) // line_h)
+            used_lines = 0
+
+            def _draw_line(raw_text: str, fill: str, font_obj):
+                nonlocal y_text, used_lines
+                if used_lines >= max_lines:
+                    return
+                wrapped = _wrap_for_width(draw, raw_text, font_obj, max_text_w, max_lines=1)
+                if not wrapped:
+                    return
+                txt = _rtl_text(wrapped[0])
+                tw = _text_width(draw, txt, font_obj)
+                draw.text((x0 + (col_w - tw) / 2, y_text), txt, fill=fill, font=font_obj)
+                y_text += line_h
+                used_lines += 1
+
+            for ev in evs:
+                if used_lines >= max_lines:
+                    break
+                style = STYLES.get(ev.get("type", "general"), STYLES["general"])
+                fill = style.get("fg", "#1E1E2D")
+                font_obj = event_bold_font if style.get("bold") else event_font
+                for line in _wrap_for_width(draw, ev.get("text", ""), font_obj, max_text_w, max_lines=2):
+                    if used_lines >= max_lines:
+                        break
+                    _draw_line(line, fill, font_obj)
+
+            if dk == "shabbat" and parasha and used_lines < max_lines:
+                _draw_line(f"פרשת {parasha}", "#F57F17", parasha_font)
+
+    out = io.BytesIO()
+    img.save(out, format="PNG", optimize=True)
+    return out.getvalue()
 
 
 # ===================================================================
