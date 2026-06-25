@@ -138,9 +138,17 @@ def verify_firebase_token(id_token: str) -> dict | None:
 def create_school(school_id: str, owner_email: str, school_name: str, classes: list[str] | None = None):
     """Create a new school document."""
     db = _get_db()
+    owner_email = owner_email.lower()
+    doc_ref = db.collection("schools").document(school_id)
+    # Refuse to overwrite a school owned by someone else (prevents a freshly
+    # signed-up user from hijacking/squatting an existing school id).
+    existing = doc_ref.get()
+    if existing.exists:
+        existing_owner = str((existing.to_dict() or {}).get("owner_email", "")).lower()
+        if existing_owner and existing_owner != owner_email:
+            raise ValueError("מזהה המוסד כבר תפוס. בחר/י מזהה אחר.")
     if classes is None:
         classes = ["יא 1", "יא 2", "יא 3"]
-    doc_ref = db.collection("schools").document(school_id)
     doc_ref.set({
         "owner_email": owner_email.lower(),
         "name": school_name,
@@ -487,7 +495,7 @@ def get_class_events(school_id: str, class_name: str) -> list[dict]:
     doc = db.collection("schools").document(school_id) \
         .collection("classes").document(class_name).get()
     if doc.exists:
-        return doc.to_dict().get("events", [])
+        return (doc.to_dict() or {}).get("events", [])
     return []
 
 
@@ -531,7 +539,7 @@ def get_schedule(school_id: str) -> dict:
         .collection("schedule_meta").document("weeks").get()
     weeks = []
     if weeks_doc.exists:
-        weeks = weeks_doc.to_dict().get("weeks", [])
+        weeks = (weeks_doc.to_dict() or {}).get("weeks", [])
 
     return {
         "classes": school.get("classes", []),

@@ -1401,11 +1401,11 @@ def exam_card_html(exam: dict) -> str:
         date_display = d.strftime("%d/%m/%Y")
     except Exception:
         date_display = exam.get("date", "")
-    details = f'סמל: {exam["code"]} | תאריך: {date_display}'
+    details = f'סמל: {html.escape(str(exam.get("code", "")))} | תאריך: {html.escape(str(date_display))}'
     if exam.get("start_time"):
-        details += f' | {exam["start_time"]}-{exam.get("end_time", "")}'
+        details += f' | {html.escape(str(exam["start_time"]))}-{html.escape(str(exam.get("end_time", "")))}'
     return (
-        f'<div class="ministry-card"><b>{exam["name"]}</b><br>{details}</div>'
+        f'<div class="ministry-card"><b>{html.escape(str(exam.get("name", "")))}</b><br>{details}</div>'
     )
 
 
@@ -1793,11 +1793,11 @@ def page_create_school(auth_info: dict):
 def _staff_card_html(email: str, role: str, classes: list[str], is_self: bool) -> str:
     """Render a single staff member as an HTML card."""
     role_label = "מנהל" if role == "director" else "מורה"
-    chips = "".join(f'<span class="class-chip">{c}</span>' for c in classes)
+    chips = "".join(f'<span class="class-chip">{html.escape(str(c))}</span>' for c in classes)
     self_tag = ' <span style="font-size:0.65rem;color:#9E9E9E;">(את/ה)</span>' if is_self else ""
     return (
         f'<div class="staff-card">'
-        f'  <div class="staff-email">{email}{self_tag}</div>'
+        f'  <div class="staff-email">{html.escape(str(email))}{self_tag}</div>'
         f'  <div class="staff-meta">{role_label} &nbsp;|&nbsp; {chips if chips else "ללא כיתות"}</div>'
         f'</div>'
     )
@@ -1960,8 +1960,8 @@ def _top_bar_html(auth_info: dict) -> str:
         f'<div class="top-bar-user">'
         f'  <div class="top-bar-avatar">{initial}</div>'
         f'  <div>'
-        f'    <div class="top-bar-name">{name}</div>'
-        f'    <div class="top-bar-email">{email}</div>'
+        f'    <div class="top-bar-name">{html.escape(str(name))}</div>'
+        f'    <div class="top-bar-email">{html.escape(str(email))}</div>'
         f'    <span class="top-bar-role {role_cls}">{role_label}</span>'
         f'  </div>'
         f'</div>'
