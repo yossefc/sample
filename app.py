@@ -2458,6 +2458,8 @@ def _edit_cell_dialog():
     cancel_col, save_col = st.columns([1, 1])
     with cancel_col:
         if st.button("סגור", key=f"dlg_cancel_{scope}", type="secondary", use_container_width=True):
+            for _k in (name_key, type_key, class_key, start_key, end_key):
+                st.session_state.pop(_k, None)
             st.rerun()
     with save_col:
         save_label = f'{STYLES.get(tp, STYLES["general"]).get("icon", "📌")} שמור'
@@ -2491,6 +2493,8 @@ def _edit_cell_dialog():
                 event_payload["end_time"] = en_time
             wk["days"][dk].append(event_payload)
             save_schedule(school_id, data, include_school_meta=False)
+            for _k in (name_key, type_key, class_key, start_key, end_key):
+                st.session_state.pop(_k, None)
             st.session_state["ui_notice_text"] = "האירוע נשמר בהצלחה"
             st.session_state["ui_notice_kind"] = "success"
             st.rerun()
