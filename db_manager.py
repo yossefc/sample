@@ -37,6 +37,14 @@ _db = None
 DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "shabbat"]
 
 
+class ScheduleConflictError(Exception):
+    """Raised by save_schedule when the stored schedule revision advanced.
+
+    Signals that another user saved between this view's load and this write, so
+    the write was rejected to avoid silently overwriting their changes.
+    """
+
+
 def _get_db():
     """Lazy-initialise Firestore client.
 
@@ -538,19 +546,29 @@ def get_schedule(school_id: str) -> dict:
     weeks_doc = db.collection("schools").document(school_id) \
         .collection("schedule_meta").document("weeks").get()
     weeks = []
+    rev = 0
     if weeks_doc.exists:
-        weeks = (weeks_doc.to_dict() or {}).get("weeks", [])
+        wd = weeks_doc.to_dict() or {}
+        weeks = wd.get("weeks", [])
+        rev = int(wd.get("rev", 0) or 0)
 
     return {
         "classes": school.get("classes", []),
         "year": school.get("year", ""),
         "weeks": weeks,
         "parashat_hashavua": school.get("parashat_hashavua", {}),
+        "_rev": rev,
     }
 
 
 def save_schedule(school_id: str, schedule_data: dict, include_school_meta: bool = True):
-    """Save schedule data.
+    """Save schedule data with optimistic concurrency control.
+
+    When schedule_data carries a "_rev" (as returned by get_schedule), the write
+    runs inside a transaction that raises ScheduleConflictError if the stored
+    revision advanced since load (i.e. someone else saved meanwhile), preventing
+    a silent last-write-wins overwrite. Calls without "_rev" (initial creation or
+    full-year regeneration) write unconditionally.
 
     Args:
         include_school_meta:
@@ -563,25 +581,43 @@ def save_schedule(school_id: str, schedule_data: dict, include_school_meta: bool
     school_ref = db.collection("schools").document(school_id)
     weeks_ref = school_ref.collection("schedule_meta").document("weeks")
 
-    # Single commit to reduce round-trips on each save.
-    batch = db.batch()
-    if include_school_meta:
-        batch.set(
-            school_ref,
+    expected_rev = schedule_data.get("_rev")
+
+    @firestore.transactional
+    def _commit(transaction):
+        # All reads must precede writes inside a Firestore transaction.
+        snap = weeks_ref.get(transaction=transaction)
+        current_rev = 0
+        if snap.exists:
+            current_rev = int((snap.to_dict() or {}).get("rev", 0) or 0)
+        if expected_rev is not None and int(expected_rev) != current_rev:
+            raise ScheduleConflictError(
+                f"schedule changed since load (loaded rev {expected_rev}, current {current_rev})"
+            )
+        new_rev = current_rev + 1
+        if include_school_meta:
+            transaction.set(
+                school_ref,
+                {
+                    "classes": schedule_data.get("classes", []),
+                    "year": schedule_data.get("year", ""),
+                    "parashat_hashavua": schedule_data.get("parashat_hashavua", {}),
+                },
+                merge=True,
+            )
+        transaction.set(
+            weeks_ref,
             {
-                "classes": schedule_data.get("classes", []),
-                "year": schedule_data.get("year", ""),
-                "parashat_hashavua": schedule_data.get("parashat_hashavua", {}),
+                "weeks": schedule_data.get("weeks", []),
+                "rev": new_rev,
             },
-            merge=True,
         )
-    batch.set(
-        weeks_ref,
-        {
-            "weeks": schedule_data.get("weeks", []),
-        },
-    )
-    batch.commit()
+        return new_rev
+
+    new_rev = _commit(db.transaction())
+    # Keep the in-memory copy's revision fresh for any follow-up save this run.
+    schedule_data["_rev"] = new_rev
+    return new_rev
 
 
 # ===================================================================
