@@ -45,6 +45,31 @@ class ScheduleConflictError(Exception):
     """
 
 
+def hebrew_year_label(heb_year_num: int) -> str:
+    """Gematria label for a Hebrew year, thousands omitted (e.g. 5786 -> תשפ\"ו).
+
+    Works for any year rather than a hard-coded lookup table, so labels stay
+    correct beyond the few years that were enumerated by hand.
+    """
+    n = heb_year_num % 1000  # the ה' (5000) is omitted by convention in labels
+    hundreds = ["", "ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק"]
+    tens = ["", "י", "כ", "ל", "מ", "נ", "ס", "ע", "פ", "צ"]
+    units = ["", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"]
+    letters = hundreds[(n // 100) % 10]
+    t, u = (n % 100) // 10, n % 10
+    if t == 1 and u == 5:        # 15 -> טו (avoid spelling a name of God)
+        letters += "טו"
+    elif t == 1 and u == 6:      # 16 -> טז
+        letters += "טז"
+    else:
+        letters += tens[t] + units[u]
+    if len(letters) >= 2:
+        return letters[:-1] + '"' + letters[-1]
+    if letters:
+        return letters + "'"
+    return str(heb_year_num)
+
+
 def _get_db():
     """Lazy-initialise Firestore client.
 
@@ -738,15 +763,29 @@ def save_holidays(year: str, data: dict):
 #
 
 def get_payments(school_id: str) -> list[dict]:
-    """Get all charge records for a school."""
+    """Get all charge records for a school, newest first.
+
+    Sorts in memory instead of via a Firestore order_by("created_at"), because
+    order_by silently drops documents that lack the field (e.g. legacy records
+    written before created_at existed).
+    """
     db = _get_db()
     payments = []
     docs = db.collection("schools").document(school_id) \
-        .collection("payments").order_by("created_at", direction=firestore.Query.DESCENDING).stream()
+        .collection("payments").stream()
     for doc in docs:
         d = doc.to_dict() or {}
         d["id"] = doc.id
         payments.append(d)
+
+    def _created_ts(p):
+        c = p.get("created_at")
+        try:
+            return c.timestamp()
+        except Exception:
+            return 0.0
+
+    payments.sort(key=_created_ts, reverse=True)
     return payments
 
 

@@ -36,6 +36,7 @@ from db_manager import (
     get_ministry_meta,
     get_permissions,
     get_schedule,
+    hebrew_year_label,
     remove_teacher_permission,
     save_ministry_exams,
     save_schedule,
@@ -1176,11 +1177,7 @@ def generate_new_year(start_year: int) -> dict:
         current += timedelta(days=7)
 
     heb_year_num = start_year + 3761
-    heb_letters = {
-        5784: 'תשפ"ד', 5785: 'תשפ"ה', 5786: 'תשפ"ו', 5787: 'תשפ"ז',
-        5788: 'תשפ"ח', 5789: 'תשפ"ט', 5790: 'תש"צ',
-    }
-    year_label = heb_letters.get(heb_year_num, f"תשפ {heb_year_num - 5000}")
+    year_label = hebrew_year_label(heb_year_num)
 
     new_data = {
         "classes": [],
