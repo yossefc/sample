@@ -11,6 +11,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py db_manager.py auth_manager.py ./
+# The Firebase Auth widget (browser login, incl. Google sign-in) lives here.
+# Without it the import fails and the app silently falls back to REST email/password.
+COPY firebase_auth_component firebase_auth_component
 COPY .streamlit .streamlit
 
 # Cloud Run injects PORT env var (default 8080)
