@@ -63,14 +63,14 @@ def build_schedule_html(data, cls, filtered_weeks):
             bg_color = "#FFFFFF" if wi % 2 else "#F8F9FA"
             if evs:
                 pr = ["bagrut", "magen", "trip", "vacation", "holiday"]
-                dm = next((x for x in pr if any(e["type"] == x for e in evs)), "general")
+                dm = next((x for x in pr if any(e.get("type") == x for e in evs)), "general")
                 bg_color = STYLES[dm]["bg"]
             cell_texts = [f'<small class="date-label">{day_date}</small>']
             for ev in evs:
-                s = STYLES.get(ev["type"], STYLES["general"])
+                s = STYLES.get(ev.get("type"), STYLES["general"])
                 cell_texts.append(
                     f'<span style="color:{s["fg"]};font-weight:{"700" if s["bold"] else "400"};">'
-                    f'{ev["text"]}</span>'
+                    f'{ev.get("text", "")}</span>'
                 )
             if dk == "shabbat" and parasha:
                 cell_texts.append(f'<span class="parasha">{parasha}</span>')

@@ -27,6 +27,7 @@ except Exception:
 
 from auth_manager import authenticate
 from db_manager import (
+    ScheduleConflictError,
     add_class_to_school,
     create_school,
     get_holidays,
@@ -35,6 +36,7 @@ from db_manager import (
     get_ministry_meta,
     get_permissions,
     get_schedule,
+    hebrew_year_label,
     remove_teacher_permission,
     save_ministry_exams,
     save_schedule,
@@ -1175,11 +1177,7 @@ def generate_new_year(start_year: int) -> dict:
         current += timedelta(days=7)
 
     heb_year_num = start_year + 3761
-    heb_letters = {
-        5784: 'תשפ"ד', 5785: 'תשפ"ה', 5786: 'תשפ"ו', 5787: 'תשפ"ז',
-        5788: 'תשפ"ח', 5789: 'תשפ"ט', 5790: 'תש"צ',
-    }
-    year_label = heb_letters.get(heb_year_num, f"תשפ {heb_year_num - 5000}")
+    year_label = hebrew_year_label(heb_year_num)
 
     new_data = {
         "classes": [],
@@ -1401,11 +1399,11 @@ def exam_card_html(exam: dict) -> str:
         date_display = d.strftime("%d/%m/%Y")
     except Exception:
         date_display = exam.get("date", "")
-    details = f'סמל: {exam["code"]} | תאריך: {date_display}'
+    details = f'סמל: {html.escape(str(exam.get("code", "")))} | תאריך: {html.escape(str(date_display))}'
     if exam.get("start_time"):
-        details += f' | {exam["start_time"]}-{exam.get("end_time", "")}'
+        details += f' | {html.escape(str(exam["start_time"]))}-{html.escape(str(exam.get("end_time", "")))}'
     return (
-        f'<div class="ministry-card"><b>{exam["name"]}</b><br>{details}</div>'
+        f'<div class="ministry-card"><b>{html.escape(str(exam.get("name", "")))}</b><br>{details}</div>'
     )
 
 
@@ -1760,6 +1758,25 @@ def _export_cache_key(data: dict, cls: str, filtered_weeks: list) -> str:
 # PAGES
 # ===================================================================
 
+def _guarded_save(school_id, data, **kwargs):
+    """Save schedule data, surfacing concurrent-edit conflicts to the user.
+
+    On ScheduleConflictError (someone else saved since this view loaded),
+    refresh the cached schedule and rerun with a notice so the user can reload
+    and retry, instead of silently overwriting the other person's changes.
+    Otherwise behaves exactly like save_schedule.
+    """
+    try:
+        return save_schedule(school_id, data, **kwargs)
+    except ScheduleConflictError:
+        get_schedule.clear()
+        st.session_state["ui_notice_text"] = (
+            "מישהו אחר עדכן את הלוח בינתיים. רעננו את הדף כדי לראות את השינויים, ונסו שוב."
+        )
+        st.session_state["ui_notice_kind"] = "error"
+        st.rerun()
+
+
 def page_create_school(auth_info: dict):
     """Page shown when a director has no school yet - create one."""
     st.markdown(
@@ -1783,7 +1800,7 @@ def page_create_school(auth_info: dict):
                 start_year = current_year if month_now >= 8 else current_year - 1
                 new_schedule = generate_new_year(start_year)
                 new_schedule["classes"] = classes
-                save_schedule(school_id.strip(), new_schedule)
+                _guarded_save(school_id.strip(), new_schedule)
                 st.toast("המוסד נוצר בהצלחה!")
                 st.rerun()
             except Exception as ex:
@@ -1793,11 +1810,11 @@ def page_create_school(auth_info: dict):
 def _staff_card_html(email: str, role: str, classes: list[str], is_self: bool) -> str:
     """Render a single staff member as an HTML card."""
     role_label = "מנהל" if role == "director" else "מורה"
-    chips = "".join(f'<span class="class-chip">{c}</span>' for c in classes)
+    chips = "".join(f'<span class="class-chip">{html.escape(str(c))}</span>' for c in classes)
     self_tag = ' <span style="font-size:0.65rem;color:#9E9E9E;">(את/ה)</span>' if is_self else ""
     return (
         f'<div class="staff-card">'
-        f'  <div class="staff-email">{email}{self_tag}</div>'
+        f'  <div class="staff-email">{html.escape(str(email))}{self_tag}</div>'
         f'  <div class="staff-meta">{role_label} &nbsp;|&nbsp; {chips if chips else "ללא כיתות"}</div>'
         f'</div>'
     )
@@ -1960,8 +1977,8 @@ def _top_bar_html(auth_info: dict) -> str:
         f'<div class="top-bar-user">'
         f'  <div class="top-bar-avatar">{initial}</div>'
         f'  <div>'
-        f'    <div class="top-bar-name">{name}</div>'
-        f'    <div class="top-bar-email">{email}</div>'
+        f'    <div class="top-bar-name">{html.escape(str(name))}</div>'
+        f'    <div class="top-bar-email">{html.escape(str(email))}</div>'
         f'    <span class="top-bar-role {role_cls}">{role_label}</span>'
         f'  </div>'
         f'</div>'
@@ -1985,7 +2002,7 @@ def render_admin_tab(data: dict, cls: str, school_id: str, auth_info: dict):
                 if st.button("הוסף", key="add_class_btn") and nc.strip() and nc.strip() not in data.get("classes", []):
                     add_class_to_school(school_id, nc.strip())
                     data["classes"].append(nc.strip())
-                    save_schedule(school_id, data)
+                    _guarded_save(school_id, data)
                     st.rerun()
 
             with st.expander("&#128197;  הוספת אירוע חדש"):
@@ -2084,7 +2101,7 @@ def _sidebar_add_event_form(data: dict, cls: str, school_id: str, auth_info: dic
             event_payload["start_time"] = st_time
             event_payload["end_time"] = en_time
         data["weeks"][wi]["days"].setdefault(dk, []).append(event_payload)
-        save_schedule(school_id, data, include_school_meta=False)
+        _guarded_save(school_id, data, include_school_meta=False)
         st.toast("אירוע נוסף!")
         st.rerun()
 
@@ -2113,7 +2130,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
             if not changes:
                 st.success("הכל מעודכן!")
             else:
-                save_schedule(school_id, data, include_school_meta=False)
+                _guarded_save(school_id, data, include_school_meta=False)
                 for ch in changes:
                     st.markdown(f"- **{ch['name']}** ({ch['code']}): {ch['old_date']} -> {ch['new_date']}")
                     if ch["conflict"]:
@@ -2140,7 +2157,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
                 if st.button(f"ייבא", key=f"import_search_{exam['code']}", use_container_width=True):
                     success, msg = import_exam_to_schedule(data, exam, cls)
                     if success:
-                        save_schedule(school_id, data, include_school_meta=False)
+                        _guarded_save(school_id, data, include_school_meta=False)
                         st.toast(msg if msg else f"יובא: {exam['name']}")
                         st.rerun()
                     else:
@@ -2163,7 +2180,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
                     if st.button("ייבא ללוח", key=f"import_{exam['code']}", type="primary", use_container_width=True):
                         success, msg = import_exam_to_schedule(data, exam, cls)
                         if success:
-                            save_schedule(school_id, data, include_school_meta=False)
+                            _guarded_save(school_id, data, include_school_meta=False)
                             st.toast(msg if msg else f"יובא: {exam['name']}")
                             st.rerun()
                         else:
@@ -2223,7 +2240,7 @@ def _run_holidays_import(data: dict, school_id: str):
                         added_count += 1
                 d += timedelta(days=1)
     if added_count > 0:
-        save_schedule(school_id, data, include_school_meta=False)
+        _guarded_save(school_id, data, include_school_meta=False)
         st.toast(f"יובאו {added_count} אירועים!")
         st.rerun()
     else:
@@ -2290,7 +2307,7 @@ def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
                     except Exception:
                         continue
 
-            save_schedule(school_id, new_data)
+            _guarded_save(school_id, new_data)
         st.toast("לוח שנה חדש נוצר!")
         st.rerun()
 
@@ -2458,6 +2475,8 @@ def _edit_cell_dialog():
     cancel_col, save_col = st.columns([1, 1])
     with cancel_col:
         if st.button("סגור", key=f"dlg_cancel_{scope}", type="secondary", use_container_width=True):
+            for _k in (name_key, type_key, class_key, start_key, end_key):
+                st.session_state.pop(_k, None)
             st.rerun()
     with save_col:
         save_label = f'{STYLES.get(tp, STYLES["general"]).get("icon", "📌")} שמור'
@@ -2490,7 +2509,9 @@ def _edit_cell_dialog():
                 event_payload["start_time"] = st_time
                 event_payload["end_time"] = en_time
             wk["days"][dk].append(event_payload)
-            save_schedule(school_id, data, include_school_meta=False)
+            _guarded_save(school_id, data, include_school_meta=False)
+            for _k in (name_key, type_key, class_key, start_key, end_key):
+                st.session_state.pop(_k, None)
             st.session_state["ui_notice_text"] = "האירוע נשמר בהצלחה"
             st.session_state["ui_notice_kind"] = "success"
             st.rerun()
@@ -2843,7 +2864,7 @@ def main():
                         if nc.strip() and nc.strip() not in data.get("classes", []):
                             add_class_to_school(school_id, nc.strip())
                             data["classes"].append(nc.strip())
-                            save_schedule(school_id, data)
+                            _guarded_save(school_id, data)
                             st.toast(f"כיתה '{nc.strip()}' נוספה!")
                             st.rerun()
 

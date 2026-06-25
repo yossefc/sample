@@ -12,7 +12,7 @@ Usage:
 
 import requests
 from datetime import datetime, timedelta
-from db_manager import save_holidays
+from db_manager import hebrew_year_label, save_holidays
 
 
 def fetch_hebrew_holidays(year):
@@ -30,10 +30,14 @@ def fetch_hebrew_holidays(year):
             english_name = item.get("title", "")
             
             if date_str:
-                holidays[english_name] = {
+                # Key by title+date so multi-day entries and the two-year merge
+                # below don't overwrite each other (which previously dropped the
+                # autumn occurrence and shifted Rosh Hashana to the wrong year).
+                holidays[f"{english_name}|{date_str}"] = {
                     "date": date_str,
                     "hebrew": hebrew_name,
-                    "category": item.get("category")
+                    "category": item.get("category"),
+                    "title": english_name,
                 }
     
     return holidays
@@ -54,12 +58,36 @@ def calculate_vacation_periods(year, holidays):
     """
     vacations = []
     
-    # Helper to find holiday by name
+    # The school year runs ~Sept(year)..Aug(year+1). Restrict matches to that
+    # window so Pesach resolves to next spring (not the spring that just passed)
+    # and Rosh Hashana to this autumn.
+    season_start = datetime(year, 8, 1)
+    season_end = datetime(year + 1, 8, 31)
+
+    # Find the first day of a holiday by title (exact, then prefix) within the
+    # school-year window, skipping "Erev" (eve) entries and robust to date
+    # strings that carry a time component.
     def find_holiday(name):
-        for h_name, h_data in holidays.items():
-            if name.lower() in h_name.lower():
-                return datetime.strptime(h_data["date"], "%Y-%m-%d")
-        return None
+        name_l = name.lower()
+        exact = None
+        prefix = None
+        for _, h_data in holidays.items():
+            title = str(h_data.get("title", "")).lower()
+            if not title or title.startswith("erev"):
+                continue
+            try:
+                d = datetime.strptime(str(h_data.get("date", ""))[:10], "%Y-%m-%d")
+            except ValueError:
+                continue
+            if d < season_start or d > season_end:
+                continue
+            if title == name_l:
+                if exact is None or d < exact:
+                    exact = d
+            elif title.startswith(name_l + " ") or title.startswith(name_l + ":"):
+                if prefix is None or d < prefix:
+                    prefix = d
+        return exact if exact is not None else prefix
     
     # 1. חופשת תשרי (Tishrei vacation - Rosh Hashana to Sukkot)
     rosh_hashana = find_holiday("Rosh Hashana")
@@ -93,7 +121,7 @@ def calculate_vacation_periods(year, holidays):
     # 3. חופשת סמסטר (Winter/Semester break - usually late January/early February)
     # This is approximately 6 months after the school year starts (Sept 1)
     # Usually around end of January or early February
-    school_start = datetime(year, 9, 1) if rosh_hashana and rosh_hashana.month >= 9 else datetime(year - 1, 9, 1)
+    school_start = datetime(year, 9, 1)
     semester_break = school_start + timedelta(days=150)  # ~5 months
     
     # Adjust to Sunday start if needed
@@ -144,7 +172,7 @@ def calculate_vacation_periods(year, holidays):
     
     # 7. חופשת קיץ (Summer vacation - June 21 to August 31)
     # The next year because school year spans two calendar years
-    summer_year = year + 1 if rosh_hashana and rosh_hashana.month >= 9 else year
+    summer_year = year + 1
     vacations.append({
         "start": f"{summer_year}-06-21",
         "end": f"{summer_year}-08-31",
@@ -196,7 +224,7 @@ def generate_and_save_vacations(year):
     
     # Prepare data structure
     data = {
-        "label": f"תשפ\"{'ו' if year == 2025 else 'ז' if year == 2026 else 'ח'}",  # Hebrew year
+        "label": hebrew_year_label(year + 3761),  # Hebrew year (gematria)
         "holidays": holidays_formatted,
         "school_vacations": vacations,
         "generated_by": "auto_vacations.py",

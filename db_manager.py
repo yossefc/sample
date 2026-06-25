@@ -37,6 +37,39 @@ _db = None
 DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "shabbat"]
 
 
+class ScheduleConflictError(Exception):
+    """Raised by save_schedule when the stored schedule revision advanced.
+
+    Signals that another user saved between this view's load and this write, so
+    the write was rejected to avoid silently overwriting their changes.
+    """
+
+
+def hebrew_year_label(heb_year_num: int) -> str:
+    """Gematria label for a Hebrew year, thousands omitted (e.g. 5786 -> תשפ\"ו).
+
+    Works for any year rather than a hard-coded lookup table, so labels stay
+    correct beyond the few years that were enumerated by hand.
+    """
+    n = heb_year_num % 1000  # the ה' (5000) is omitted by convention in labels
+    hundreds = ["", "ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק"]
+    tens = ["", "י", "כ", "ל", "מ", "נ", "ס", "ע", "פ", "צ"]
+    units = ["", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"]
+    letters = hundreds[(n // 100) % 10]
+    t, u = (n % 100) // 10, n % 10
+    if t == 1 and u == 5:        # 15 -> טו (avoid spelling a name of God)
+        letters += "טו"
+    elif t == 1 and u == 6:      # 16 -> טז
+        letters += "טז"
+    else:
+        letters += tens[t] + units[u]
+    if len(letters) >= 2:
+        return letters[:-1] + '"' + letters[-1]
+    if letters:
+        return letters + "'"
+    return str(heb_year_num)
+
+
 def _get_db():
     """Lazy-initialise Firestore client.
 
@@ -138,9 +171,17 @@ def verify_firebase_token(id_token: str) -> dict | None:
 def create_school(school_id: str, owner_email: str, school_name: str, classes: list[str] | None = None):
     """Create a new school document."""
     db = _get_db()
+    owner_email = owner_email.lower()
+    doc_ref = db.collection("schools").document(school_id)
+    # Refuse to overwrite a school owned by someone else (prevents a freshly
+    # signed-up user from hijacking/squatting an existing school id).
+    existing = doc_ref.get()
+    if existing.exists:
+        existing_owner = str((existing.to_dict() or {}).get("owner_email", "")).lower()
+        if existing_owner and existing_owner != owner_email:
+            raise ValueError("מזהה המוסד כבר תפוס. בחר/י מזהה אחר.")
     if classes is None:
         classes = ["יא 1", "יא 2", "יא 3"]
-    doc_ref = db.collection("schools").document(school_id)
     doc_ref.set({
         "owner_email": owner_email.lower(),
         "name": school_name,
@@ -487,7 +528,7 @@ def get_class_events(school_id: str, class_name: str) -> list[dict]:
     doc = db.collection("schools").document(school_id) \
         .collection("classes").document(class_name).get()
     if doc.exists:
-        return doc.to_dict().get("events", [])
+        return (doc.to_dict() or {}).get("events", [])
     return []
 
 
@@ -530,19 +571,29 @@ def get_schedule(school_id: str) -> dict:
     weeks_doc = db.collection("schools").document(school_id) \
         .collection("schedule_meta").document("weeks").get()
     weeks = []
+    rev = 0
     if weeks_doc.exists:
-        weeks = weeks_doc.to_dict().get("weeks", [])
+        wd = weeks_doc.to_dict() or {}
+        weeks = wd.get("weeks", [])
+        rev = int(wd.get("rev", 0) or 0)
 
     return {
         "classes": school.get("classes", []),
         "year": school.get("year", ""),
         "weeks": weeks,
         "parashat_hashavua": school.get("parashat_hashavua", {}),
+        "_rev": rev,
     }
 
 
 def save_schedule(school_id: str, schedule_data: dict, include_school_meta: bool = True):
-    """Save schedule data.
+    """Save schedule data with optimistic concurrency control.
+
+    When schedule_data carries a "_rev" (as returned by get_schedule), the write
+    runs inside a transaction that raises ScheduleConflictError if the stored
+    revision advanced since load (i.e. someone else saved meanwhile), preventing
+    a silent last-write-wins overwrite. Calls without "_rev" (initial creation or
+    full-year regeneration) write unconditionally.
 
     Args:
         include_school_meta:
@@ -555,25 +606,43 @@ def save_schedule(school_id: str, schedule_data: dict, include_school_meta: bool
     school_ref = db.collection("schools").document(school_id)
     weeks_ref = school_ref.collection("schedule_meta").document("weeks")
 
-    # Single commit to reduce round-trips on each save.
-    batch = db.batch()
-    if include_school_meta:
-        batch.set(
-            school_ref,
+    expected_rev = schedule_data.get("_rev")
+
+    @firestore.transactional
+    def _commit(transaction):
+        # All reads must precede writes inside a Firestore transaction.
+        snap = weeks_ref.get(transaction=transaction)
+        current_rev = 0
+        if snap.exists:
+            current_rev = int((snap.to_dict() or {}).get("rev", 0) or 0)
+        if expected_rev is not None and int(expected_rev) != current_rev:
+            raise ScheduleConflictError(
+                f"schedule changed since load (loaded rev {expected_rev}, current {current_rev})"
+            )
+        new_rev = current_rev + 1
+        if include_school_meta:
+            transaction.set(
+                school_ref,
+                {
+                    "classes": schedule_data.get("classes", []),
+                    "year": schedule_data.get("year", ""),
+                    "parashat_hashavua": schedule_data.get("parashat_hashavua", {}),
+                },
+                merge=True,
+            )
+        transaction.set(
+            weeks_ref,
             {
-                "classes": schedule_data.get("classes", []),
-                "year": schedule_data.get("year", ""),
-                "parashat_hashavua": schedule_data.get("parashat_hashavua", {}),
+                "weeks": schedule_data.get("weeks", []),
+                "rev": new_rev,
             },
-            merge=True,
         )
-    batch.set(
-        weeks_ref,
-        {
-            "weeks": schedule_data.get("weeks", []),
-        },
-    )
-    batch.commit()
+        return new_rev
+
+    new_rev = _commit(db.transaction())
+    # Keep the in-memory copy's revision fresh for any follow-up save this run.
+    schedule_data["_rev"] = new_rev
+    return new_rev
 
 
 # ===================================================================
@@ -694,15 +763,29 @@ def save_holidays(year: str, data: dict):
 #
 
 def get_payments(school_id: str) -> list[dict]:
-    """Get all charge records for a school."""
+    """Get all charge records for a school, newest first.
+
+    Sorts in memory instead of via a Firestore order_by("created_at"), because
+    order_by silently drops documents that lack the field (e.g. legacy records
+    written before created_at existed).
+    """
     db = _get_db()
     payments = []
     docs = db.collection("schools").document(school_id) \
-        .collection("payments").order_by("created_at", direction=firestore.Query.DESCENDING).stream()
+        .collection("payments").stream()
     for doc in docs:
         d = doc.to_dict() or {}
         d["id"] = doc.id
         payments.append(d)
+
+    def _created_ts(p):
+        c = p.get("created_at")
+        try:
+            return c.timestamp()
+        except Exception:
+            return 0.0
+
+    payments.sort(key=_created_ts, reverse=True)
     return payments
 
 
