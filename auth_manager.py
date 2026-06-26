@@ -559,7 +559,7 @@ _LOGIN_CSS = """
 
 
 def _render_login_ui():
-    """Show Firebase email/password login page."""
+    """Show Google-only login page (Streamlit native authentication)."""
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
 
     st.markdown(
@@ -571,49 +571,10 @@ def _render_login_ui():
         unsafe_allow_html=True,
     )
 
-    # Tab: Login or Register
-    if "login_tab" not in st.session_state:
-        st.session_state["login_tab"] = "login"
-
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        tab_login, tab_register = st.tabs(["כניסה", "הרשמה"])
-
-        with tab_login:
-            with st.form("login_form", clear_on_submit=False):
-                email = st.text_input("אימייל", placeholder="you@school.co.il", key="login_email")
-                password = st.text_input("סיסמה", type="password", key="login_pass")
-                submitted = st.form_submit_button("התחבר", use_container_width=True, type="primary")
-
-                if submitted:
-                    _handle_login(email, password)
-
-            # Forgot password
-            if st.button("שכחתי סיסמה", key="forgot_pass_btn"):
-                st.session_state["show_reset"] = True
-
-            if st.session_state.get("show_reset"):
-                reset_email = st.text_input("אימייל לאיפוס", key="reset_email_input", placeholder="you@school.co.il")
-                if st.button("שלח קישור איפוס", key="send_reset_btn"):
-                    if reset_email and reset_email.strip():
-                        result = _firebase_reset_password(reset_email.strip())
-                        if "error" in result:
-                            st.error(f"שגיאה: {result['error']}")
-                        else:
-                            st.success("נשלח קישור לאיפוס סיסמה לאימייל שלך")
-                            st.session_state["show_reset"] = False
-                    else:
-                        st.warning("הזן אימייל")
-
-        with tab_register:
-            with st.form("register_form", clear_on_submit=False):
-                reg_email = st.text_input("אימייל", placeholder="you@school.co.il", key="reg_email")
-                reg_pass = st.text_input("סיסמה", type="password", key="reg_pass")
-                reg_pass2 = st.text_input("אימות סיסמה", type="password", key="reg_pass2")
-                reg_submitted = st.form_submit_button("הרשמה", use_container_width=True, type="primary")
-
-                if reg_submitted:
-                    _handle_register(reg_email, reg_pass, reg_pass2)
+        if st.button("התחברות עם Google", use_container_width=True, type="primary", key="google_login_btn"):
+            st.login()
 
 
 def _handle_login(email: str, password: str):
@@ -738,77 +699,25 @@ def authenticate() -> dict:
                     result["allowed_classes"] = [pub_class]
         return result
 
-    # Explicit logout request (browser + server)
-    if st.session_state.get("auth_logout_requested"):
-        _clear_persistent_login_session()
-        st.session_state.pop("auth_refresh_token", None)
-        if _can_use_browser_auth():
-            payload = _render_browser_auth_widget(action="logout", height=1, key="firebase_auth_logout")
-            state = _consume_browser_auth_payload(payload)
-            if state and state.get("status") == "logged_out":
-                st.session_state.pop("auth_logout_requested", None)
-                st.rerun()
-            if state and state.get("status") == "logout_error":
-                st.session_state.pop("auth_logout_requested", None)
-                st.warning("לא ניתן היה להתנתק בדפדפן. נסה שוב.")
-            else:
-                st.info("מתנתק...")
-            return result
-        st.session_state.pop("auth_logout_requested", None)
-
-    # Restore persistent login (survives browser refresh)
-    if "auth_email" not in st.session_state:
-        restored = _restore_login_from_persistent_session()
-        if restored:
-            email = restored["email"]
-            result["authenticated"] = True
-            result["email"] = email
-            result["name"] = restored.get("name", email)
-            return _resolve_schools(result, email)
-
-    # Session-authenticated user
-    if "auth_email" in st.session_state:
-        email = st.session_state["auth_email"]
-        name = st.session_state.get("auth_name", email)
-
-        # Silent browser-auth sync can be expensive if done on every rerun.
-        # Throttle it to keep event confirmations responsive.
-        if _can_use_browser_auth():
-            now_ts = _now_ts()
-            last_sync_ts = int(st.session_state.get("auth_browser_sync_ts", 0) or 0)
-            if (now_ts - last_sync_ts) >= _AUTH_BROWSER_SYNC_INTERVAL_SECONDS:
-                sync_payload = _render_browser_auth_widget(action="auth", height=1, key="firebase_auth_sync")
-                _consume_browser_auth_payload(sync_payload)
-                st.session_state["auth_browser_sync_ts"] = now_ts
-                email = st.session_state.get("auth_email", email)
-                name = st.session_state.get("auth_name", name)
-
-        _persist_login_session(email, name, st.session_state.get("auth_refresh_token", ""))
-        result["authenticated"] = True
-        result["email"] = email
-        result["name"] = name
-        return _resolve_schools(result, email)
-
-    # Browser auth widget: keeps user signed-in across refresh
-    if _can_use_browser_auth():
-        payload = _render_browser_auth_widget(action="auth", height=560, key="firebase_auth_main")
-        state = _consume_browser_auth_payload(payload)
-        if state and state.get("status") == "authenticated":
-            email = state["email"]
-            result["authenticated"] = True
-            result["email"] = email
-            result["name"] = state.get("name", email)
-            return _resolve_schools(result, email)
-        if state and state.get("status") == "invalid_token":
-            _clear_persistent_login_session()
-            for k in ("auth_email", "auth_name", "auth_token", "auth_uid", "auth_token_exp", "auth_refresh_token", "auth_sid"):
-                st.session_state.pop(k, None)
-            st.error("תוקף ההתחברות פג. התחבר שוב.")
+    # Native Streamlit Google authentication (st.login / st.user).
+    # st.login() redirects to Google; on return, st.user carries the identity.
+    user = getattr(st, "user", None)
+    if not (user and getattr(user, "is_logged_in", False)):
+        _render_login_ui()
         return result
 
-    # Fallback: REST login UI
-    _render_login_ui()
-    return result
+    email = str(getattr(user, "email", "") or "").strip().lower()
+    if not email:
+        st.error("לא ניתן לקרוא את כתובת האימייל מחשבון Google.")
+        if st.button("התנתק ונסה שוב", key="auth_relogin_btn"):
+            st.logout()
+        return result
+
+    name = str(getattr(user, "name", "") or "").strip() or email.split("@")[0]
+    result["authenticated"] = True
+    result["email"] = email
+    result["name"] = name
+    return _resolve_schools(result, email)
 
 
 # ───────────────────────────────────────────────
