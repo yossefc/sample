@@ -2686,10 +2686,8 @@ def main():
     with logout_col:
         st.markdown('<div class="logout-btn" style="padding-top:16px">', unsafe_allow_html=True)
         if st.button("יציאה", key="logout_btn", use_container_width=True):
-            st.session_state["auth_logout_requested"] = True
-            for k in ("auth_email", "auth_name", "auth_token", "auth_uid", "auth_token_exp", "auth_refresh_token", "auth_sid", "selected_school_id"):
-                st.session_state.pop(k, None)
-            st.rerun()
+            st.session_state.pop("selected_school_id", None)
+            st.logout()
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Shared selector defaults
