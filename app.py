@@ -2320,46 +2320,61 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
     meta = get_ministry_meta()
     moed_info = meta.get("moed", "")
     exam_count = meta.get("count", 0)
-    if moed_info:
-        st.caption(f"{moed_info} | {exam_count} בחינות")
+
+    # Current state of the shared ministry exam database
+    st.markdown("**מאגר הבחינות במערכת:**")
+    st.caption(f"{moed_info} — {exam_count} בחינות" if moed_info else "(ריק)")
 
     _ms_start_year = _schedule_start_year(data)
     if _ms_start_year is not None:
         _sched_exam_year = _ms_start_year + 1
         _db_year = _ministry_data_year()
         if _db_year == _sched_exam_year:
-            st.success(f"✅ יש תאריכי בגרות רשמיים לשנת הלוח ({_sched_exam_year}).")
+            st.success(f"✅ יש תאריכים רשמיים לשנת הלוח ({_sched_exam_year}).")
         else:
             st.warning(
-                f"⚠️ אין עדיין תאריכי בגרות רשמיים לשנת הלוח ({_sched_exam_year}). "
-                f"במאגר יש תאריכים לשנת {_db_year or '?'} בלבד. "
-                f"ניתן להוסיף בגרויות ידנית מהטיוטה (למטה)."
+                f"⚠️ אין עדיין תאריכים רשמיים לשנת הלוח ({_sched_exam_year}). "
+                f"במאגר יש שנת {_db_year or '?'} בלבד — ניתן להוסיף ידנית למטה."
             )
 
-    season_label = st.radio("מועד", ["קיץ", "חורף"], horizontal=True, key="ministry_season")
+    # Persistent result of the last download, so the user sees what happened
+    _dl = st.session_state.get("ministry_download_result")
+    if _dl:
+        (st.success if _dl[0] == "ok" else st.error)(_dl[1])
+
+    st.divider()
+    st.markdown("**1️⃣ הורדת בחינות ממשרד החינוך**")
+    season_label = st.radio("איזה מועד?", ["קיץ", "חורף"], horizontal=True, key="ministry_season")
     season = "winter" if season_label == "חורף" else "summer"
-    col_refresh, col_sync = st.columns(2)
-    with col_refresh:
-        if st.button("עדכן מהמשרד", key="refresh_ministry", use_container_width=True):
-            try:
-                with st.spinner("מוריד..."):
-                    count = refresh_ministry_db_from_web(season=season)
-                st.toast(f"עודכן! {count} בחינות ({season_label})")
-                st.rerun()
-            except Exception as ex:
-                st.error(f"שגיאה: {ex}")
-    with col_sync:
-        if st.button("סנכרן תאריכים", key="resync_btn", use_container_width=True):
-            changes = resync_dates_with_ministry(data, cls)
-            if not changes:
-                st.success("הכל מעודכן!")
-            else:
-                _guarded_save(school_id, data, include_school_meta=False)
-                for ch in changes:
-                    st.markdown(f"- **{ch['name']}** ({ch['code']}): {ch['old_date']} -> {ch['new_date']}")
-                    if ch["conflict"]:
-                        st.error(ch["conflict"])
-                st.rerun()
+    if st.button(f"📥 הורד בחינות {season_label} מהמשרד", key="refresh_ministry",
+                 use_container_width=True, type="primary"):
+        try:
+            with st.spinner("מוריד מהמשרד..."):
+                count = refresh_ministry_db_from_web(season=season)
+            new_moed = get_ministry_meta().get("moed", season_label)
+            st.session_state["ministry_download_result"] = ("ok", f"✅ הורדו {count} בחינות ({new_moed}).")
+        except Exception:
+            st.session_state["ministry_download_result"] = (
+                "err", f"❌ לא נמצא קובץ {season_label} במשרד (כנראה טרם פורסם). המאגר הקיים נשמר.")
+        st.rerun()
+
+    st.divider()
+    st.markdown("**2️⃣ עדכון הבגרויות שכבר בלוח**")
+    st.caption("מתאים את התאריכים של הבגרויות שכבר נמצאות בלוח לפי המאגר")
+    if st.button("🔄 עדכן את הלוח לפי המאגר", key="resync_btn", use_container_width=True):
+        changes = resync_dates_with_ministry(data, cls)
+        if not changes:
+            st.success("הכל מעודכן — אין שינויים")
+        else:
+            _guarded_save(school_id, data, include_school_meta=False)
+            for ch in changes:
+                st.markdown(f"- **{ch['name']}** ({ch['code']}): {ch['old_date']} ← {ch['new_date']}")
+                if ch["conflict"]:
+                    st.error(ch["conflict"])
+            st.rerun()
+
+    st.divider()
+    st.markdown("**3️⃣ הוספת בגרות מהמאגר ללוח**")
 
     with st.form("ministry_search_form", clear_on_submit=False):
         search_query = st.text_input(
@@ -2410,6 +2425,8 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
                         else:
                             st.info(msg)
 
+    st.divider()
+    st.markdown("**4️⃣ הוספת בגרות ידנית (מהטיוטה)**")
     _render_manual_bagrut(data, cls, school_id)
     _render_bagrut_cleanup(data, cls, school_id)
 
