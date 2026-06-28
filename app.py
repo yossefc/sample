@@ -2329,13 +2329,15 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
     if _ms_start_year is not None:
         st.info(f"התאריכים יותאמו אוטומטית לשנת הלוח ({_ms_start_year + 1}) בעת ייבוא.")
 
+    season_label = st.radio("מועד", ["קיץ", "חורף"], horizontal=True, key="ministry_season")
+    season = "winter" if season_label == "חורף" else "summer"
     col_refresh, col_sync = st.columns(2)
     with col_refresh:
         if st.button("עדכן מהמשרד", key="refresh_ministry", use_container_width=True):
             try:
                 with st.spinner("מוריד..."):
-                    count = refresh_ministry_db_from_web()
-                st.toast(f"עודכן! {count} בחינות")
+                    count = refresh_ministry_db_from_web(season=season)
+                st.toast(f"עודכן! {count} בחינות ({season_label})")
                 st.rerun()
             except Exception as ex:
                 st.error(f"שגיאה: {ex}")
