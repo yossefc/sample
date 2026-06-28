@@ -1154,6 +1154,31 @@ def refresh_ministry_db_from_web(season: str = "summer") -> int:
     return len(exams)
 
 
+def _build_holidays_via_hebcal(start_year: int, year_label: str) -> dict | None:
+    """Fetch holidays + school vacations live from Hebcal.
+
+    Fallback used when a brand-new year has no pre-generated data in Firestore,
+    so the generated calendar is never empty. Best-effort (returns None on any
+    failure / no network).
+    """
+    try:
+        from auto_vacations import (
+            fetch_hebrew_holidays,
+            calculate_vacation_periods,
+            format_holidays_for_firestore,
+        )
+        merged = {**fetch_hebrew_holidays(start_year), **fetch_hebrew_holidays(start_year + 1)}
+        if not merged:
+            return None
+        return {
+            "label": year_label,
+            "holidays": format_holidays_for_firestore(merged),
+            "school_vacations": calculate_vacation_periods(start_year, merged),
+        }
+    except Exception:
+        return None
+
+
 def generate_new_year(start_year: int) -> dict:
     """Generate a new academic year schedule structure. No hardcoded dates."""
     sep1 = datetime(start_year, 9, 1)
@@ -1186,10 +1211,19 @@ def generate_new_year(start_year: int) -> dict:
         "parashat_hashavua": {},
     }
 
+    # Prefer pre-generated Firestore holiday data; if none exists for this year,
+    # fall back to fetching live from Hebcal so a brand-new year is never empty.
+    holiday_sources = []
     for yr_key in [str(start_year), str(start_year + 1)]:
-        holidays_data = get_holidays(yr_key)
-        if not holidays_data:
-            continue
+        hd = get_holidays(yr_key)
+        if hd:
+            holiday_sources.append((yr_key, hd))
+    if not holiday_sources:
+        live = _build_holidays_via_hebcal(start_year, year_label)
+        if live:
+            holiday_sources.append((str(start_year), live))
+
+    for yr_key, holidays_data in holiday_sources:
         if "label" in holidays_data and yr_key == str(start_year):
             new_data["year"] = holidays_data["label"]
         for h in holidays_data.get("holidays", []):
@@ -2312,6 +2346,12 @@ def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
         st.rerun()
 
 
+@st.dialog("מעבר לשנה חדשה", width="large")
+def _dialog_year_rollover(data: dict, cls: str, school_id: str):
+    """Modal-window version of the year-rollover panel."""
+    _sidebar_year_rollover(data, cls, school_id)
+
+
 def render_export_tab(data: dict, cls: str, filtered_weeks: list):
     """Export & Share tab ג€” horizontal grid layout."""
     st.markdown(
@@ -2677,12 +2717,32 @@ def main():
         f'</div>'
     )
 
-    bar_col, logout_col = st.columns([7, 1])
+    schools = auth_info.get("schools", [])
+    if len(schools) > 1:
+        bar_col, school_col, logout_col = st.columns([6, 1.6, 1])
+    else:
+        bar_col, logout_col = st.columns([7, 1])
+        school_col = None
     with bar_col:
         st.markdown(
             f'<div class="top-bar">{user_html}{title_html}</div>',
             unsafe_allow_html=True,
         )
+    if school_col is not None:
+        with school_col:
+            st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
+            school_ids = [s["id"] for s in schools]
+            school_names = {s["id"]: s.get("name", s["id"]) for s in schools}
+            cur_id = auth_info.get("school_id")
+            cur_idx = school_ids.index(cur_id) if cur_id in school_ids else 0
+            picked = st.selectbox(
+                "מוסד", school_ids, index=cur_idx,
+                format_func=lambda x: school_names.get(x, x),
+                key="school_switch", label_visibility="collapsed",
+            )
+            if picked and picked != cur_id:
+                st.session_state["selected_school_id"] = picked
+                st.rerun()
     with logout_col:
         st.markdown('<div class="logout-btn" style="padding-top:16px">', unsafe_allow_html=True)
         if st.button("יציאה", key="logout_btn", use_container_width=True):
@@ -2761,20 +2821,28 @@ def main():
                     st.caption("לחיצה מעתיקה את הקישור:")
                     st.code(share_url, language=None)
 
-            # 2) Download Excel
+            # 2) Excel — generated lazily (only on click) to keep reruns fast
             with exp_c2:
                 xl_cache_key = _export_cache_key(data, cls, filtered_weeks)
-                if st.session_state.get("xl_cache_key") != xl_cache_key:
-                    st.session_state["xl_cache_key"] = xl_cache_key
-                    st.session_state["xl_bytes"] = to_excel(data, cls)
-                st.download_button(
-                    "\U0001F4CA קובץ Excel",
-                    data=st.session_state["xl_bytes"],
-                    file_name=f"לוח_{cls}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.document",
-                    use_container_width=True,
-                    key="top_download_excel",
+                xl_ready = (
+                    st.session_state.get("xl_cache_key") == xl_cache_key
+                    and st.session_state.get("xl_bytes") is not None
                 )
+                if xl_ready:
+                    st.download_button(
+                        "\U0001F4CA קובץ Excel",
+                        data=st.session_state["xl_bytes"],
+                        file_name=f"לוח_{cls}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.document",
+                        use_container_width=True,
+                        key="top_download_excel",
+                    )
+                else:
+                    if st.button("\U0001F4CA צור Excel", key="top_gen_excel", use_container_width=True):
+                        with st.spinner("יוצר Excel..."):
+                            st.session_state["xl_bytes"] = to_excel(data, cls)
+                            st.session_state["xl_cache_key"] = xl_cache_key
+                        st.rerun()
 
             # 3) Download Image
             with exp_c3:
@@ -2830,6 +2898,10 @@ def main():
                         if action_kind == "action":
                             st.session_state["open_panel"] = None
                             _run_holidays_import(data, school_id)
+                        elif key == "new_year":
+                            # Open as a centered modal popup instead of the side panel.
+                            st.session_state["open_panel"] = None
+                            _dialog_year_rollover(data, panel_cls, school_id)
                         else:
                             st.session_state["open_panel"] = None if is_open else key
                             st.rerun()
@@ -2846,12 +2918,6 @@ def main():
                     st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
                     st.markdown('<div class="side-panel-heading">סנכרון בגרויות</div>', unsafe_allow_html=True)
                     _sidebar_ministry_tools(data, panel_cls, school_id)
-
-            elif panel == "new_year" and is_director:
-                with st.container():
-                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="side-panel-heading">מעבר לשנה חדשה</div>', unsafe_allow_html=True)
-                    _sidebar_year_rollover(data, panel_cls, school_id)
 
             elif panel == "add_class" and is_director:
                 with st.container():
