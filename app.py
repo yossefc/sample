@@ -1179,6 +1179,24 @@ def _build_holidays_via_hebcal(start_year: int, year_label: str) -> dict | None:
         return None
 
 
+def _year_display(data: dict) -> tuple[str, str]:
+    """Return (hebrew_label, gregorian_span) for the header, derived from the
+    schedule weeks so it stays correct for any year (no hard-coded dates)."""
+    weeks = data.get("weeks", []) or []
+    sy = ey = None
+    if weeks:
+        try:
+            sy = int(str(weeks[0].get("start_date", ""))[:4])
+            ey = int(str(weeks[-1].get("start_date", ""))[:4])
+        except Exception:
+            sy = ey = None
+    heb = str(data.get("year", "") or "")
+    if not heb and sy:
+        heb = hebrew_year_label(sy + 3761)
+    greg = f"{sy}-{ey}" if (sy and ey and sy != ey) else (str(sy) if sy else "")
+    return heb, greg
+
+
 def generate_new_year(start_year: int) -> dict:
     """Generate a new academic year schedule structure. No hardcoded dates."""
     sep1 = datetime(start_year, 9, 1)
@@ -2294,9 +2312,14 @@ def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
     current_year = datetime.now().year
     col_yr, col_bg = st.columns([1, 1])
     with col_yr:
-        new_year_start = st.number_input(
-            "שנה", min_value=2024, max_value=2040,
-            value=current_year, key="new_year_input",
+        # Pick the year by its Hebrew (gematria) label; the stored value is the
+        # Gregorian start year that generate_new_year expects.
+        year_choices = list(range(current_year - 1, current_year + 6))
+        default_idx = year_choices.index(current_year) if current_year in year_choices else 0
+        new_year_start = st.selectbox(
+            "שנה", year_choices, index=default_idx,
+            format_func=lambda y: hebrew_year_label(y + 3761),
+            key="new_year_select",
         )
     with col_bg:
         st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
@@ -2350,6 +2373,33 @@ def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
 def _dialog_year_rollover(data: dict, cls: str, school_id: str):
     """Modal-window version of the year-rollover panel."""
     _sidebar_year_rollover(data, cls, school_id)
+
+
+@st.dialog("הוספת אירוע", width="large")
+def _dialog_add_event(data: dict, cls: str, school_id: str, auth_info: dict):
+    _sidebar_add_event_form(data, cls, school_id, auth_info)
+
+
+@st.dialog("סנכרון בגרויות", width="large")
+def _dialog_ministry(data: dict, cls: str, school_id: str):
+    _sidebar_ministry_tools(data, cls, school_id)
+
+
+@st.dialog("כיתה חדשה")
+def _dialog_add_class(data: dict, school_id: str):
+    nc = st.text_input("שם", key="nc", placeholder="יא 4")
+    if st.button("הוסף כיתה", key="add_class_btn", type="primary", use_container_width=True):
+        if nc.strip() and nc.strip() not in data.get("classes", []):
+            add_class_to_school(school_id, nc.strip())
+            data["classes"].append(nc.strip())
+            _guarded_save(school_id, data)
+            st.toast(f"כיתה '{nc.strip()}' נוספה!")
+            st.rerun()
+
+
+@st.dialog("ניהול צוות", width="large")
+def _dialog_staff(auth_info: dict):
+    page_manage_staff(auth_info)
 
 
 def render_export_tab(data: dict, cls: str, filtered_weeks: list):
@@ -2566,13 +2616,16 @@ def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list
     can_edit = is_director or is_teacher
 
     # ── Header ──
-    year_label = data.get("year", "")
+    heb_year, greg_span = _year_display(data)
     school_name = auth_info.get("school_name", "")
+    _subtitle = " &nbsp;|&nbsp; ".join(
+        p for p in (greg_span, html.escape(str(school_name)), html.escape(str(cls))) if p
+    )
 
     st.markdown(
         f'<div class="app-title">'
-        f'<h1>לוח מבחנים {year_label}</h1>'
-        f'<p>2025 - 2026 &nbsp;|&nbsp; {school_name} &nbsp;|&nbsp; {cls}</p>'
+        f'<h1>לוח מבחנים {html.escape(heb_year)}</h1>'
+        f'<p>{_subtitle}</p>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -2706,14 +2759,15 @@ def main():
     # ──────────────────────────────────────────
     # TOP BAR ג€” user info + class selector + date range
     # ──────────────────────────────────────────
-    year_label = data.get("year", "")
+    heb_year, greg_span = _year_display(data)
     school_name = auth_info.get("school_name", "")
 
     user_html = _top_bar_html(auth_info)
+    _subtitle = " &nbsp;|&nbsp; ".join(p for p in (greg_span, html.escape(str(school_name))) if p)
     title_html = (
         f'<div class="top-bar-title">'
-        f'  <h2>לוח מבחנים {year_label}</h2>'
-        f'  <p>2025 - 2026 &nbsp;|&nbsp; {school_name}</p>'
+        f'  <h2>לוח מבחנים {html.escape(heb_year)}</h2>'
+        f'  <p>{_subtitle}</p>'
         f'</div>'
     )
 
@@ -2892,51 +2946,19 @@ def main():
                         _event_button_theme_css(f"nav_{key}", theme_by_action.get(key, "general")),
                         unsafe_allow_html=True,
                     )
-                    is_open = st.session_state["open_panel"] == key
-                    btn_type = "primary" if action_kind == "panel" and is_open else "secondary"
-                    if st.button(label, key=f"nav_{key}", use_container_width=True, type=btn_type):
+                    if st.button(label, key=f"nav_{key}", use_container_width=True):
                         if action_kind == "action":
-                            st.session_state["open_panel"] = None
                             _run_holidays_import(data, school_id)
                         elif key == "new_year":
-                            # Open as a centered modal popup instead of the side panel.
-                            st.session_state["open_panel"] = None
                             _dialog_year_rollover(data, panel_cls, school_id)
-                        else:
-                            st.session_state["open_panel"] = None if is_open else key
-                            st.rerun()
-
-            panel = st.session_state["open_panel"]
-            if panel == "add_event" and is_director:
-                with st.container():
-                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="side-panel-heading">הוספת אירוע</div>', unsafe_allow_html=True)
-                    _sidebar_add_event_form(data, panel_cls, school_id, auth_info)
-
-            elif panel == "ministry" and is_director:
-                with st.container():
-                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="side-panel-heading">סנכרון בגרויות</div>', unsafe_allow_html=True)
-                    _sidebar_ministry_tools(data, panel_cls, school_id)
-
-            elif panel == "add_class" and is_director:
-                with st.container():
-                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="side-panel-heading">כיתה חדשה</div>', unsafe_allow_html=True)
-                    nc = st.text_input("שם", key="nc", placeholder="יא 4")
-                    if st.button("הוסף כיתה", key="add_class_btn", type="primary", use_container_width=True):
-                        if nc.strip() and nc.strip() not in data.get("classes", []):
-                            add_class_to_school(school_id, nc.strip())
-                            data["classes"].append(nc.strip())
-                            _guarded_save(school_id, data)
-                            st.toast(f"כיתה '{nc.strip()}' נוספה!")
-                            st.rerun()
-
-            elif panel == "staff" and is_director:
-                with st.container():
-                    st.markdown('<div class="side-panel-marker"></div>', unsafe_allow_html=True)
-                    st.markdown('<div class="side-panel-heading">ניהול צוות</div>', unsafe_allow_html=True)
-                    page_manage_staff(auth_info)
+                        elif key == "add_event":
+                            _dialog_add_event(data, panel_cls, school_id, auth_info)
+                        elif key == "ministry":
+                            _dialog_ministry(data, panel_cls, school_id)
+                        elif key == "add_class":
+                            _dialog_add_class(data, school_id)
+                        elif key == "staff":
+                            _dialog_staff(auth_info)
 
     # ── Main column: schedule table ──
     with col_main:
