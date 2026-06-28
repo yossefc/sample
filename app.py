@@ -2273,6 +2273,10 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
     if moed_info:
         st.caption(f"{moed_info} | {exam_count} בחינות")
 
+    _ms_start_year = _schedule_start_year(data)
+    if _ms_start_year is not None:
+        st.info(f"התאריכים יותאמו אוטומטית לשנת הלוח ({_ms_start_year + 1}) בעת ייבוא.")
+
     col_refresh, col_sync = st.columns(2)
     with col_refresh:
         if st.button("עדכן מהמשרד", key="refresh_ministry", use_container_width=True):
