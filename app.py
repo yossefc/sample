@@ -2265,6 +2265,58 @@ def _render_bagrut_cleanup(data: dict, cls: str, school_id: str):
             st.rerun()
 
 
+def _render_manual_bagrut(data: dict, cls: str, school_id: str):
+    """Manually add a bagrut exam — for dates not yet in the ministry DB
+    (e.g. read off a published draft calendar / טיוטה)."""
+    with st.expander("➕ הוספת בגרות ידנית (מתוך טיוטת משרד החינוך)"):
+        weeks = data.get("weeks", [])
+        try:
+            _min = datetime.strptime(weeks[0]["start_date"], "%Y-%m-%d").date()
+            _max = (datetime.strptime(weeks[-1]["start_date"], "%Y-%m-%d") + timedelta(days=6)).date()
+        except Exception:
+            _min = _max = None
+        with st.form("manual_bagrut_form", clear_on_submit=True):
+            name = st.text_input("מקצוע", placeholder="מתמטיקה")
+            code = st.text_input("סמל (לא חובה)", placeholder="035806")
+            if _min:
+                bdate = st.date_input("תאריך הבחינה", value=_min, min_value=_min, max_value=_max, key="manual_bagrut_date")
+            else:
+                bdate = st.date_input("תאריך הבחינה", key="manual_bagrut_date")
+            c1, c2 = st.columns(2)
+            with c1:
+                stime = st.text_input("שעת התחלה", placeholder="09:00")
+            with c2:
+                etime = st.text_input("שעת סיום", placeholder="12:30")
+            if st.form_submit_button("הוסף ללוח", type="primary", use_container_width=True):
+                if not name.strip():
+                    st.warning("הזן שם מקצוע")
+                else:
+                    target = datetime.combine(bdate, datetime.min.time())
+                    loc = date_to_week_day(data["weeks"], target)
+                    if loc is None:
+                        st.error("התאריך מחוץ לטווח הלוח")
+                    else:
+                        wi, dk = loc
+                        st_n = _normalize_exam_time(stime)
+                        et_n = _normalize_exam_time(etime)
+                        label = f"בגרות {name.strip()}"
+                        if code.strip():
+                            label += f" ({code.strip()})"
+                        if st_n and et_n:
+                            label += f" {st_n}-{et_n}"
+                        data["weeks"][wi]["days"].setdefault(dk, []).append({
+                            "text": label,
+                            "type": "bagrut",
+                            "class": cls,
+                            "exam_code": code.strip() or f"manual_{name.strip()}",
+                            "start_time": st_n,
+                            "end_time": et_n,
+                        })
+                        _guarded_save(school_id, data, include_school_meta=False)
+                        st.toast(f"נוספה בגרות: {name.strip()}")
+                        st.rerun()
+
+
 def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
     """Ministry of Education import + sync tools."""
     meta = get_ministry_meta()
@@ -2349,6 +2401,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
                         else:
                             st.info(msg)
 
+    _render_manual_bagrut(data, cls, school_id)
     _render_bagrut_cleanup(data, cls, school_id)
 
 
