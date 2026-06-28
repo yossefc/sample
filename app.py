@@ -1321,12 +1321,40 @@ def _build_bagrut_label(exam: dict) -> str:
         return f"{base} {start_time}"
     return base
 
+def _schedule_start_year(data: dict) -> int | None:
+    """September start year of the schedule, derived from its first week."""
+    weeks = data.get("weeks", []) or []
+    if not weeks:
+        return None
+    try:
+        return int(str(weeks[0].get("start_date", ""))[:4])
+    except Exception:
+        return None
+
+
+def _align_exam_date(exam_date: datetime, start_year: int) -> datetime:
+    """Map a ministry exam date onto the school year starting in `start_year`
+    (Sept start_year .. Aug start_year+1), keeping the month/day but fixing the
+    year. Ministry data carries the previous session's dates, so without this an
+    imported bagrut lands on last year's date — outside the current schedule.
+    """
+    target_year = start_year if exam_date.month >= 9 else start_year + 1
+    try:
+        return exam_date.replace(year=target_year)
+    except ValueError:  # e.g. Feb 29 in a non-leap target year
+        return exam_date.replace(year=target_year, day=28)
+
+
 def import_exam_to_schedule(data: dict, exam: dict, cls: str) -> tuple[bool, str]:
     """Add a ministry exam to the schedule. Returns (success, message)."""
     try:
         target = datetime.strptime(exam["date"], "%Y-%m-%d")
     except Exception:
         return False, "תאריך לא תקין"
+
+    start_year = _schedule_start_year(data)
+    if start_year is not None:
+        target = _align_exam_date(target, start_year)
 
     loc = date_to_week_day(data["weeks"], target)
     if loc is None:
@@ -1362,6 +1390,7 @@ def resync_dates_with_ministry(data: dict, cls: str) -> list[dict]:
     all_exams = get_ministry_exams()
     ministry_lookup = {ex["code"]: ex for ex in all_exams if ex.get("code") != "_metadata"}
     changes = []
+    start_year = _schedule_start_year(data)
 
     for wi, wk in enumerate(data["weeks"]):
         try:
@@ -1386,6 +1415,8 @@ def resync_dates_with_ministry(data: dict, cls: str) -> list[dict]:
                     official_date = datetime.strptime(official["date"], "%Y-%m-%d")
                 except Exception:
                     continue
+                if start_year is not None:
+                    official_date = _align_exam_date(official_date, start_year)
                 if current_date.date() == official_date.date():
                     continue
                 new_loc = date_to_week_day(data["weeks"], official_date)
@@ -2928,41 +2959,33 @@ def main():
                         except Exception as ex:
                             st.error(f"שגיאה ביצירת PNG: {ex}")
 
-    # ── Split area: side management aligned with table level ──
+    # ── Menu actions: horizontal bar above the full-width table ──
     if action_buttons:
-        col_side, col_main = st.columns([1.0, 4.4], gap="small")
-    else:
-        col_side = None
-        col_main = st.container()
+        st.markdown('<div class="manage-side-marker"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="manage-side-title">תפריט ניהול</div>', unsafe_allow_html=True)
+        btn_cols = st.columns(len(action_buttons))
+        for (key, label, action_kind), bcol in zip(action_buttons, btn_cols):
+            with bcol:
+                st.markdown(
+                    _event_button_theme_css(f"nav_{key}", theme_by_action.get(key, "general")),
+                    unsafe_allow_html=True,
+                )
+                if st.button(label, key=f"nav_{key}", use_container_width=True):
+                    if action_kind == "action":
+                        _run_holidays_import(data, school_id)
+                    elif key == "new_year":
+                        _dialog_year_rollover(data, panel_cls, school_id)
+                    elif key == "add_event":
+                        _dialog_add_event(data, panel_cls, school_id, auth_info)
+                    elif key == "ministry":
+                        _dialog_ministry(data, panel_cls, school_id)
+                    elif key == "add_class":
+                        _dialog_add_class(data, school_id)
+                    elif key == "staff":
+                        _dialog_staff(auth_info)
 
-    # ── Side management buttons (same level as table) ──
-    if col_side is not None:
-        with col_side:
-            with st.container():
-                st.markdown('<div class="manage-side-marker"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="manage-side-title">ניהול מהיר לפי צבע ואייקון</div>', unsafe_allow_html=True)
-                for key, label, action_kind in action_buttons:
-                    st.markdown(
-                        _event_button_theme_css(f"nav_{key}", theme_by_action.get(key, "general")),
-                        unsafe_allow_html=True,
-                    )
-                    if st.button(label, key=f"nav_{key}", use_container_width=True):
-                        if action_kind == "action":
-                            _run_holidays_import(data, school_id)
-                        elif key == "new_year":
-                            _dialog_year_rollover(data, panel_cls, school_id)
-                        elif key == "add_event":
-                            _dialog_add_event(data, panel_cls, school_id, auth_info)
-                        elif key == "ministry":
-                            _dialog_ministry(data, panel_cls, school_id)
-                        elif key == "add_class":
-                            _dialog_add_class(data, school_id)
-                        elif key == "staff":
-                            _dialog_staff(auth_info)
-
-    # ── Main column: schedule table ──
-    with col_main:
-        render_scheduler(data, cls, auth_info, filtered_weeks)
+    # ── Schedule table (full width) ──
+    render_scheduler(data, cls, auth_info, filtered_weeks)
 
 if __name__ == "__main__":
     main()
