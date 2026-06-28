@@ -1109,15 +1109,27 @@ def refresh_ministry_db_from_web(season: str = "summer") -> int:
     from openpyxl import load_workbook
 
     current_year = datetime.now().year
+    # The ministry doesn't always publish next year's file yet, and the file for
+    # a given year can disappear; try a few years and use the first that exists.
+    years = [current_year + 1, current_year, current_year - 1]
     if season == "summer":
-        url = f"https://meyda.education.gov.il/files/Exams/HoursSumExams{current_year}.xlsx"
-        moed_label = f'מועד קיץ {current_year}'
+        candidates = [(f"https://meyda.education.gov.il/files/Exams/HoursSumExams{y}.xlsx", f'מועד קיץ {y}') for y in years]
     else:
-        url = f"https://meyda.education.gov.il/files/Exams/LuachWinExams{current_year}HOURS.xlsx"
-        moed_label = f'מועד חורף {current_year}'
+        candidates = [(f"https://meyda.education.gov.il/files/Exams/LuachWinExams{y}HOURS.xlsx", f'מועד חורף {y}') for y in years]
 
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
+    resp = None
+    moed_label = ""
+    for url, label in candidates:
+        try:
+            r = requests.get(url, timeout=30)
+            r.raise_for_status()
+            resp, moed_label = r, label
+            break
+        except Exception:
+            continue
+    if resp is None:
+        raise RuntimeError("קובץ הבחינות של משרד החינוך לא נמצא (ייתכן שטרם פורסם לשנה זו). הנתונים הקיימים נשמרו.")
+
     wb = load_workbook(io.BytesIO(resp.content), data_only=True)
     ws = wb.active
 
@@ -2189,6 +2201,70 @@ def _sidebar_add_event_form(data: dict, cls: str, school_id: str, auth_info: dic
         st.rerun()
 
 
+def _bagrut_in_schedule(data: dict, cls: str) -> list[tuple[str, str]]:
+    """Distinct (exam_code, label) bagrut events currently in the schedule for cls."""
+    seen = {}
+    for wk in data.get("weeks", []):
+        for cell in (wk.get("days", {}) or {}).values():
+            for ev in (cell or []):
+                if ev.get("type") == "bagrut" and ev.get("class") in (cls, "all"):
+                    code = str(ev.get("exam_code", "") or "")
+                    if code and code not in seen:
+                        seen[code] = str(ev.get("text", "") or code)
+    return sorted(seen.items(), key=lambda kv: kv[1])
+
+
+def _delete_bagrut_from_schedule(data: dict, codes: set, cls: str) -> int:
+    """Remove all bagrut events whose exam_code is in `codes` for cls. Returns count."""
+    removed = 0
+    for wk in data.get("weeks", []):
+        days = wk.get("days", {}) or {}
+        for dk, cell in list(days.items()):
+            if not cell:
+                continue
+            kept = []
+            for ev in cell:
+                if (ev.get("type") == "bagrut"
+                        and str(ev.get("exam_code", "") or "") in codes
+                        and ev.get("class") in (cls, "all")):
+                    removed += 1
+                else:
+                    kept.append(ev)
+            days[dk] = kept
+    return removed
+
+
+def _render_bagrut_cleanup(data: dict, cls: str, school_id: str):
+    """UI to remove bagrut subjects that aren't taught in this school."""
+    in_sched = _bagrut_in_schedule(data, cls)
+    if not in_sched:
+        return
+    st.markdown("---")
+    st.caption(f"בגרויות בלוח ({len(in_sched)}) — מחיקת מקצועות שאינם נלמדים")
+    labels = dict(in_sched)
+    to_delete = st.multiselect(
+        "בחר בגרויות למחיקה",
+        [c for c, _ in in_sched],
+        format_func=lambda c: labels.get(c, c),
+        key="bagrut_delete_select",
+        label_visibility="collapsed",
+        placeholder="בחר בגרויות למחיקה...",
+    )
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        if st.button("🗑 מחק נבחרות", key="del_sel_bagrut", use_container_width=True, disabled=not to_delete):
+            n = _delete_bagrut_from_schedule(data, set(to_delete), cls)
+            _guarded_save(school_id, data, include_school_meta=False)
+            st.toast(f"נמחקו {n} בגרויות")
+            st.rerun()
+    with col_d2:
+        if st.button("מחק הכל", key="del_all_bagrut", use_container_width=True):
+            n = _delete_bagrut_from_schedule(data, {c for c, _ in in_sched}, cls)
+            _guarded_save(school_id, data, include_school_meta=False)
+            st.toast(f"נמחקו {n} בגרויות")
+            st.rerun()
+
+
 def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
     """Ministry of Education import + sync tools."""
     meta = get_ministry_meta()
@@ -2268,6 +2344,8 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
                             st.rerun()
                         else:
                             st.info(msg)
+
+    _render_bagrut_cleanup(data, cls, school_id)
 
 
 def _run_holidays_import(data: dict, school_id: str):
