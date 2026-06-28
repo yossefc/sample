@@ -1344,17 +1344,16 @@ def _schedule_start_year(data: dict) -> int | None:
         return None
 
 
-def _align_exam_date(exam_date: datetime, start_year: int) -> datetime:
-    """Map a ministry exam date onto the school year starting in `start_year`
-    (Sept start_year .. Aug start_year+1), keeping the month/day but fixing the
-    year. Ministry data carries the previous session's dates, so without this an
-    imported bagrut lands on last year's date — outside the current schedule.
-    """
-    target_year = start_year if exam_date.month >= 9 else start_year + 1
-    try:
-        return exam_date.replace(year=target_year)
-    except ValueError:  # e.g. Feb 29 in a non-leap target year
-        return exam_date.replace(year=target_year, day=28)
+def _ministry_data_year() -> int | None:
+    """Calendar year of the exams currently loaded in the ministry DB."""
+    for ex in get_ministry_exams():
+        if ex.get("code") == "_metadata":
+            continue
+        try:
+            return datetime.strptime(ex["date"], "%Y-%m-%d").year
+        except Exception:
+            continue
+    return None
 
 
 def import_exam_to_schedule(data: dict, exam: dict, cls: str) -> tuple[bool, str]:
@@ -1364,9 +1363,11 @@ def import_exam_to_schedule(data: dict, exam: dict, cls: str) -> tuple[bool, str
     except Exception:
         return False, "תאריך לא תקין"
 
+    # Only place exams whose official year matches the schedule's exam year
+    # (start_year+1); never fabricate an estimated date from another year.
     start_year = _schedule_start_year(data)
-    if start_year is not None:
-        target = _align_exam_date(target, start_year)
+    if start_year is not None and target.year != start_year + 1:
+        return False, f"אין תאריך רשמי לשנת הלוח ({start_year + 1}). ניתן להוסיף ידנית מהטיוטה."
 
     loc = date_to_week_day(data["weeks"], target)
     if loc is None:
@@ -1402,7 +1403,6 @@ def resync_dates_with_ministry(data: dict, cls: str) -> list[dict]:
     all_exams = get_ministry_exams()
     ministry_lookup = {ex["code"]: ex for ex in all_exams if ex.get("code") != "_metadata"}
     changes = []
-    start_year = _schedule_start_year(data)
 
     for wi, wk in enumerate(data["weeks"]):
         try:
@@ -1427,8 +1427,6 @@ def resync_dates_with_ministry(data: dict, cls: str) -> list[dict]:
                     official_date = datetime.strptime(official["date"], "%Y-%m-%d")
                 except Exception:
                     continue
-                if start_year is not None:
-                    official_date = _align_exam_date(official_date, start_year)
                 if current_date.date() == official_date.date():
                     continue
                 new_loc = date_to_week_day(data["weeks"], official_date)
@@ -2327,7 +2325,16 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
 
     _ms_start_year = _schedule_start_year(data)
     if _ms_start_year is not None:
-        st.info(f"התאריכים יותאמו אוטומטית לשנת הלוח ({_ms_start_year + 1}) בעת ייבוא.")
+        _sched_exam_year = _ms_start_year + 1
+        _db_year = _ministry_data_year()
+        if _db_year == _sched_exam_year:
+            st.success(f"✅ יש תאריכי בגרות רשמיים לשנת הלוח ({_sched_exam_year}).")
+        else:
+            st.warning(
+                f"⚠️ אין עדיין תאריכי בגרות רשמיים לשנת הלוח ({_sched_exam_year}). "
+                f"במאגר יש תאריכים לשנת {_db_year or '?'} בלבד. "
+                f"ניתן להוסיף בגרויות ידנית מהטיוטה (למטה)."
+            )
 
     season_label = st.radio("מועד", ["קיץ", "חורף"], horizontal=True, key="ministry_season")
     season = "winter" if season_label == "חורף" else "summer"
@@ -2500,6 +2507,7 @@ def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
             if import_bagrut:
                 all_exams = get_ministry_exams()
                 all_exams = [e for e in all_exams if e.get("code") != "_metadata"]
+                target_exam_year = int(new_year_start) + 1
                 db_base_year = None
                 for ex in all_exams:
                     try:
@@ -2507,30 +2515,31 @@ def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
                         break
                     except Exception:
                         continue
-                if db_base_year:
-                    target_exam_year = int(new_year_start) + 1
-                    year_offset = target_exam_year - db_base_year
+                if db_base_year != target_exam_year:
+                    # No official ministry dates for this year yet -> import nothing
+                    # rather than fabricating estimated dates from another year.
+                    st.session_state["ui_notice_text"] = (
+                        f"לא יובאו בגרויות: אין עדיין תאריכים רשמיים לשנת {target_exam_year} "
+                        f"(במאגר: {db_base_year or '?'}). ניתן להוסיף בגרויות ידנית."
+                    )
+                    st.session_state["ui_notice_kind"] = "warning"
                 else:
-                    year_offset = 0
-
-                for exam in all_exams:
-                    try:
-                        orig_date = datetime.strptime(exam["date"], "%Y-%m-%d")
-                        shifted_date = orig_date.replace(year=orig_date.year + year_offset) if year_offset else orig_date
-                        loc = date_to_week_day(new_data["weeks"], shifted_date)
-                        if loc:
-                            wi, dk = loc
-                            label = _build_bagrut_label(exam)
-                            new_data["weeks"][wi]["days"][dk].append({
-                                "text": label,
-                                "type": "bagrut",
-                                "class": cls,
-                                "exam_code": exam["code"],
-                                "start_time": _normalize_exam_time(exam.get("start_time")),
-                                "end_time": _normalize_exam_time(exam.get("end_time")),
-                            })
-                    except Exception:
-                        continue
+                    for exam in all_exams:
+                        try:
+                            exam_date = datetime.strptime(exam["date"], "%Y-%m-%d")
+                            loc = date_to_week_day(new_data["weeks"], exam_date)
+                            if loc:
+                                wi, dk = loc
+                                new_data["weeks"][wi]["days"][dk].append({
+                                    "text": _build_bagrut_label(exam),
+                                    "type": "bagrut",
+                                    "class": cls,
+                                    "exam_code": exam["code"],
+                                    "start_time": _normalize_exam_time(exam.get("start_time")),
+                                    "end_time": _normalize_exam_time(exam.get("end_time")),
+                                })
+                        except Exception:
+                            continue
 
             _guarded_save(school_id, new_data)
         st.toast("לוח שנה חדש נוצר!")
