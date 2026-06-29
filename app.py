@@ -1104,14 +1104,18 @@ def fetch_parasha_from_api(start_year: int, end_year: int) -> dict:
     return parasha_map
 
 
-def refresh_ministry_db_from_web(season: str = "summer") -> int:
-    """Download Ministry of Education exam schedule Excel and store in Firestore."""
+def refresh_ministry_db_from_web(season: str = "summer", year: int | None = None) -> int:
+    """Download Ministry of Education exam schedule Excel and store in Firestore.
+
+    If `year` is given, only that year's file is fetched; otherwise a few recent
+    years are tried and the first available is used.
+    """
     from openpyxl import load_workbook
 
     current_year = datetime.now().year
     # The ministry doesn't always publish next year's file yet, and the file for
     # a given year can disappear; try a few years and use the first that exists.
-    years = [current_year + 1, current_year, current_year - 1]
+    years = [int(year)] if year else [current_year + 1, current_year, current_year - 1]
     if season == "summer":
         candidates = [(f"https://meyda.education.gov.il/files/Exams/HoursSumExams{y}.xlsx", f'מועד קיץ {y}') for y in years]
     else:
@@ -2344,18 +2348,25 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
 
     st.divider()
     st.markdown("**1️⃣ הורדת בחינות ממשרד החינוך**")
-    season_label = st.radio("איזה מועד?", ["קיץ", "חורף"], horizontal=True, key="ministry_season")
+    _now_year = datetime.now().year
+    _dl_default_year = (_ms_start_year + 1) if _ms_start_year is not None else _now_year
+    _yr_opts = sorted({_now_year - 1, _now_year, _now_year + 1, _now_year + 2, _dl_default_year})
+    c_season, c_year = st.columns(2)
+    with c_season:
+        season_label = st.radio("מועד", ["קיץ", "חורף"], horizontal=True, key="ministry_season")
+    with c_year:
+        dl_year = st.selectbox("שנה (לועזית)", _yr_opts, index=_yr_opts.index(_dl_default_year), key="ministry_dl_year")
     season = "winter" if season_label == "חורף" else "summer"
-    if st.button(f"📥 הורד בחינות {season_label} מהמשרד", key="refresh_ministry",
+    if st.button(f"📥 הורד בחינות {season_label} {dl_year} מהמשרד", key="refresh_ministry",
                  use_container_width=True, type="primary"):
         try:
             with st.spinner("מוריד מהמשרד..."):
-                count = refresh_ministry_db_from_web(season=season)
-            new_moed = get_ministry_meta().get("moed", season_label)
+                count = refresh_ministry_db_from_web(season=season, year=int(dl_year))
+            new_moed = get_ministry_meta().get("moed", f"{season_label} {dl_year}")
             st.session_state["ministry_download_result"] = ("ok", f"✅ הורדו {count} בחינות ({new_moed}).")
         except Exception:
             st.session_state["ministry_download_result"] = (
-                "err", f"❌ לא נמצא קובץ {season_label} במשרד (כנראה טרם פורסם). המאגר הקיים נשמר.")
+                "err", f"❌ לא נמצא קובץ {season_label} {dl_year} במשרד (כנראה טרם פורסם). המאגר הקיים נשמר.")
         st.rerun()
 
     st.divider()
