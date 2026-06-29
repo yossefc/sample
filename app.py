@@ -2355,7 +2355,11 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
     with c_season:
         season_label = st.radio("מועד", ["קיץ", "חורף"], horizontal=True, key="ministry_season")
     with c_year:
-        dl_year = st.selectbox("שנה (לועזית)", _yr_opts, index=_yr_opts.index(_dl_default_year), key="ministry_dl_year")
+        dl_year = st.selectbox(
+            "שנה", _yr_opts, index=_yr_opts.index(_dl_default_year),
+            format_func=lambda y: f"{y} ({hebrew_year_label(y + 3760)})",
+            key="ministry_dl_year",
+        )
     season = "winter" if season_label == "חורף" else "summer"
     if st.button(f"📥 הורד בחינות {season_label} {dl_year} מהמשרד", key="refresh_ministry",
                  use_container_width=True, type="primary"):
@@ -2521,7 +2525,7 @@ def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
         default_idx = year_choices.index(current_year) if current_year in year_choices else 0
         new_year_start = st.selectbox(
             "שנה", year_choices, index=default_idx,
-            format_func=lambda y: hebrew_year_label(y + 3761),
+            format_func=lambda y: f"{hebrew_year_label(y + 3761)} ({y}/{y + 1})",
             key="new_year_select",
         )
     with col_bg:
@@ -2822,14 +2826,15 @@ def render_scheduler(data: dict, cls: str, auth_info: dict, filtered_weeks: list
 
     # ── Header ──
     heb_year, greg_span = _year_display(data)
+    year_full = f"{heb_year} ({greg_span})" if (heb_year and greg_span) else (heb_year or greg_span)
     school_name = auth_info.get("school_name", "")
     _subtitle = " &nbsp;|&nbsp; ".join(
-        p for p in (greg_span, html.escape(str(school_name)), html.escape(str(cls))) if p
+        p for p in (html.escape(str(school_name)), html.escape(str(cls))) if p
     )
 
     st.markdown(
         f'<div class="app-title">'
-        f'<h1>לוח מבחנים {html.escape(heb_year)}</h1>'
+        f'<h1>לוח מבחנים {html.escape(year_full)}</h1>'
         f'<p>{_subtitle}</p>'
         f'</div>',
         unsafe_allow_html=True,
@@ -2965,13 +2970,14 @@ def main():
     # TOP BAR ג€” user info + class selector + date range
     # ──────────────────────────────────────────
     heb_year, greg_span = _year_display(data)
+    year_full = f"{heb_year} ({greg_span})" if (heb_year and greg_span) else (heb_year or greg_span)
     school_name = auth_info.get("school_name", "")
 
     user_html = _top_bar_html(auth_info)
-    _subtitle = " &nbsp;|&nbsp; ".join(p for p in (greg_span, html.escape(str(school_name))) if p)
+    _subtitle = html.escape(str(school_name))
     title_html = (
         f'<div class="top-bar-title">'
-        f'  <h2>לוח מבחנים {html.escape(heb_year)}</h2>'
+        f'  <h2>לוח מבחנים {html.escape(year_full)}</h2>'
         f'  <p>{_subtitle}</p>'
         f'</div>'
     )
