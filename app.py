@@ -1629,11 +1629,16 @@ def _rtl_text(text: str) -> str:
 
 def _load_export_font(size: int, bold: bool = False):
     from PIL import ImageFont
+    import os
 
+    # Bundled-in-repo font first: the host (e.g. Streamlit Cloud) may not ship a
+    # Hebrew-capable font, which made exported images render Hebrew as ☐ boxes.
+    font_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
     candidates = []
     if bold:
         candidates.extend(
             [
+                os.path.join(font_dir, "DejaVuSans-Bold.ttf"),
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
                 "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
                 "C:\\Windows\\Fonts\\arialbd.ttf",
@@ -1641,6 +1646,7 @@ def _load_export_font(size: int, bold: bool = False):
         )
     candidates.extend(
         [
+            os.path.join(font_dir, "DejaVuSans.ttf"),
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
             "/System/Library/Fonts/Supplemental/Arial.ttf",
@@ -1732,7 +1738,9 @@ def schedule_to_png(data: dict, cls: str, filtered_weeks: list):
     event_bold_font = _load_export_font(18, bold=True)
     parasha_font = _load_export_font(17, bold=True)
 
-    title = _rtl_text(f'לוח מבחנים {data.get("year", "")} - {cls}')
+    _heb_y, _greg_y = _year_display(data)
+    _year_full = f"{_heb_y} ({_greg_y})" if (_heb_y and _greg_y) else (_heb_y or _greg_y)
+    title = _rtl_text(f'לוח מבחנים {_year_full} - {cls}')
     t_w = _text_width(draw, title, title_font)
     draw.text(((width - t_w) / 2, margin + 8), title, fill="#1A237E", font=title_font)
 
