@@ -89,20 +89,39 @@ def calculate_vacation_periods(year, holidays):
                     prefix = d
         return exact if exact is not None else prefix
     
-    # 1. חופשת תשרי (Tishrei vacation - Rosh Hashana to Sukkot)
+    # Tishrei is NOT one long break. The Ministry calendar gives separate
+    # vacations and keeps the week between Rosh Hashana and Yom Kippur as school
+    # days, so we generate distinct periods instead of a blanket "חופשת תשרי".
     rosh_hashana = find_holiday("Rosh Hashana")
-    sukkot_end = find_holiday("Shmini Atzeret")  # Last day of Sukkot period
-    
-    if rosh_hashana and sukkot_end:
-        # Start one day before Rosh Hashana
-        start = rosh_hashana - timedelta(days=1)
-        # End the day after Simchat Torah/Shmini Atzeret
-        end = sukkot_end + timedelta(days=1)
-        
+    yom_kippur = find_holiday("Yom Kippur")
+    sukkot = find_holiday("Sukkot")
+    sukkot_end = find_holiday("Shmini Atzeret")  # = Simchat Torah in Israel
+
+    # 1. חופשת ראש השנה — ערב + שני ימי החג (לימודים מתחדשים אחרי).
+    if rosh_hashana:
         vacations.append({
-            "start": start.strftime("%Y-%m-%d"),
-            "end": end.strftime("%Y-%m-%d"),
-            "text": "חופשת תשרי"
+            "start": (rosh_hashana - timedelta(days=1)).strftime("%Y-%m-%d"),
+            "end": (rosh_hashana + timedelta(days=1)).strftime("%Y-%m-%d"),
+            "text": "חופשת ראש השנה"
+        })
+
+    # 2. חופשת יום כיפור — ערב + יום החג.
+    if yom_kippur:
+        vacations.append({
+            "start": (yom_kippur - timedelta(days=1)).strftime("%Y-%m-%d"),
+            "end": yom_kippur.strftime("%Y-%m-%d"),
+            "text": "חופשת יום כיפור"
+        })
+
+    # 3. חופשת סוכות — מהיום שאחרי יום כיפור (כולל ימי החופשה שבין יו"כ לסוכות)
+    #    ועד אחרי שמחת תורה.
+    sukkot_start = (yom_kippur + timedelta(days=1)) if yom_kippur else (
+        (sukkot - timedelta(days=1)) if sukkot else None)
+    if sukkot_start and sukkot_end:
+        vacations.append({
+            "start": sukkot_start.strftime("%Y-%m-%d"),
+            "end": sukkot_end.strftime("%Y-%m-%d"),  # עד שמחת תורה ועד בכלל
+            "text": "חופשת סוכות"
         })
     
     # 2. חופשת חנוכה (Chanukah vacation)
