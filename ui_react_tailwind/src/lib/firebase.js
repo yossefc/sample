@@ -16,13 +16,13 @@ import { getFirestore } from 'firebase/firestore';
 
 const env = import.meta.env ?? {};
 
+// Auth + Firestore only need apiKey / authDomain / projectId. appId and
+// messagingSenderId are for Analytics and friends, so they are deliberately
+// omitted — that removes the "register a web app" setup step entirely.
 const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY ?? '',
+  apiKey: env.VITE_FIREBASE_API_KEY ?? 'AIzaSyDI1reM4nK4fxCYiNTadonchAiroc-86MI',
   authDomain: env.VITE_FIREBASE_AUTH_DOMAIN ?? 'table-93579.firebaseapp.com',
   projectId: env.VITE_FIREBASE_PROJECT_ID ?? 'table-93579',
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET ?? 'table-93579.appspot.com',
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? '',
-  appId: env.VITE_FIREBASE_APP_ID ?? '',
 };
 
 export const firebaseApp = initializeApp(firebaseConfig);
