@@ -10,7 +10,7 @@
  */
 
 import {
-  collection, doc, getDoc, getDocs, query, runTransaction, where,
+  collection, doc, getDoc, getDocs, query, runTransaction, setDoc, where,
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { DAY_KEYS } from './constants.js';
@@ -87,7 +87,17 @@ export async function loadSchool(schoolId) {
     ownerEmail: String(d.owner_email ?? '').toLowerCase(),
     classes: Array.isArray(d.classes) ? d.classes : [],
     year: d.year ?? '',
+    parashot: d.parashat_hashavua && typeof d.parashat_hashavua === 'object' ? d.parashat_hashavua : {},
   };
+}
+
+/** Merge year label / parashot / classes into the school document. */
+export async function saveSchoolMeta(schoolId, { year, parashot, classes } = {}) {
+  const patch = {};
+  if (year != null) patch.year = year;
+  if (parashot) patch.parashat_hashavua = parashot;
+  if (classes) patch.classes = classes;
+  await setDoc(doc(db, 'schools', schoolId), patch, { merge: true });
 }
 
 export async function loadPermissions(schoolId) {
@@ -209,4 +219,87 @@ export function applySystemDays(weeks, holidays, vacationDays) {
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Ministry (bagrut) exams — ports of the Python import helpers.
+// ---------------------------------------------------------------------------
+
+/** "9:5" / "09:05:00" / Date -> "09:05"; anything else passes through. */
+export function normalizeExamTime(value) {
+  if (value == null) return '';
+  const raw = String(value).trim();
+  if (!raw) return '';
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(raw);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : raw;
+}
+
+/** Display label for a bagrut event, e.g. "בגרות מתמטיקה (035806) 09:00-12:00". */
+export function buildBagrutLabel(exam) {
+  const start = normalizeExamTime(exam?.start_time);
+  const end = normalizeExamTime(exam?.end_time);
+  let base = `בגרות ${exam?.name ?? ''}`.trim();
+  if (exam?.code) base += ` (${exam.code})`;
+  if (start && end) base += ` ${start}-${end}`;
+  return base;
+}
+
+/**
+ * The school's ministry exam list plus its metadata. Falls back to the legacy
+ * shared collection while the school has no copy of its own.
+ */
+export async function loadMinistryExams(schoolId) {
+  const read = async (col) => {
+    const snap = await getDocs(col);
+    const exams = [];
+    let meta = {};
+    snap.docs.forEach((d) => {
+      if (d.id === '_metadata') meta = d.data() ?? {};
+      else exams.push({ code: d.id, ...(d.data() ?? {}) });
+    });
+    return { exams, meta };
+  };
+  const own = await read(collection(db, 'schools', schoolId, 'ministry_data'));
+  if (own.exams.length) return own;
+  return read(collection(db, 'global_ministry_data'));
+}
+
+/** Calendar year of the loaded ministry exams (null if none). */
+export function ministryDataYear(exams) {
+  for (const ex of exams || []) {
+    const y = Number(String(ex?.date ?? '').slice(0, 4));
+    if (y) return y;
+  }
+  return null;
+}
+
+/**
+ * Place a ministry exam in the schedule for a class.
+ * Refuses an exam whose official year isn't the schedule's exam year
+ * (startYear+1): we never fabricate an estimated date from another session.
+ * Returns { weeks, ok, message }.
+ */
+export function importExamToWeeks(weeks, exam, cls, startYear) {
+  const date = String(exam?.date ?? '').slice(0, 10);
+  const examYear = Number(date.slice(0, 4));
+  if (!examYear) return { weeks, ok: false, message: 'תאריך לא תקין' };
+  if (startYear != null && examYear !== startYear + 1) {
+    return { weeks, ok: false, message: `אין תאריך רשמי לשנת הלוח (${startYear + 1}). ניתן להוסיף ידנית.` };
+  }
+  const slot = findDaySlot(weeks, date);
+  if (!slot) return { weeks, ok: false, message: 'התאריך לא נמצא בטווח השבועות של הלוח' };
+  const [wi, dk] = slot;
+  const cell = weeks[wi].days[dk] ?? [];
+  if (cell.some((e) => e.exam_code === exam.code && e.class === cls)) {
+    return { weeks, ok: false, message: 'הבגרות כבר קיימת בלוח בתאריך זה' };
+  }
+  const event = {
+    text: buildBagrutLabel(exam),
+    type: 'bagrut',
+    class: cls,
+    exam_code: exam.code,
+    start_time: normalizeExamTime(exam.start_time),
+    end_time: normalizeExamTime(exam.end_time),
+  };
+  return { weeks: withDayEvents(weeks, date, [...cell, event]), ok: true, message: '' };
 }
