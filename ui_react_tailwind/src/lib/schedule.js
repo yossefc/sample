@@ -10,7 +10,7 @@
  */
 
 import {
-  collection, doc, getDoc, getDocs, query, runTransaction, setDoc, where,
+  collection, doc, getDoc, getDocs, query, runTransaction, setDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { DAY_KEYS } from './constants.js';
@@ -264,30 +264,39 @@ export async function loadMinistryExams(schoolId) {
   return read(collection(db, 'global_ministry_data'));
 }
 
-/** Calendar year of the loaded ministry exams (null if none). */
-export function ministryDataYear(exams) {
-  for (const ex of exams || []) {
-    const y = Number(String(ex?.date ?? '').slice(0, 4));
-    if (y) return y;
-  }
-  return null;
+/** Does this exam date fall inside the school year starting in `startYear`? */
+export function inSchoolYear(dateStr, startYear) {
+  const t = Date.parse(`${String(dateStr ?? '').slice(0, 10)}T00:00:00Z`);
+  return Number.isFinite(t)
+    && t >= Date.UTC(startYear, 8, 1)
+    && t <= Date.UTC(startYear + 1, 7, 31);
+}
+
+/** How many of the loaded exams belong to this school year. */
+export function ministryCoverage(exams, startYear) {
+  const list = exams || [];
+  return { total: list.length, inYear: list.filter((e) => inSchoolYear(e.date, startYear)).length };
 }
 
 /**
  * Place a ministry exam in the schedule for a class.
- * Refuses an exam whose official year isn't the schedule's exam year
- * (startYear+1): we never fabricate an estimated date from another session.
+ *
+ * The schedule's own date range is the test — not an equality on the year.
+ * A winter session legitimately starts in December of the *first* calendar year
+ * (תשפ"ז runs 28/12/2026 → 09/02/2027), so requiring startYear+1 would have
+ * rejected half of it; while a previous session's dates fall outside the
+ * schedule entirely and are still refused.
+ *
  * Returns { weeks, ok, message }.
  */
-export function importExamToWeeks(weeks, exam, cls, startYear) {
+export function importExamToWeeks(weeks, exam, cls) {
   const date = String(exam?.date ?? '').slice(0, 10);
-  const examYear = Number(date.slice(0, 4));
-  if (!examYear) return { weeks, ok: false, message: 'תאריך לא תקין' };
-  if (startYear != null && examYear !== startYear + 1) {
-    return { weeks, ok: false, message: `אין תאריך רשמי לשנת הלוח (${startYear + 1}). ניתן להוסיף ידנית.` };
-  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { weeks, ok: false, message: 'תאריך לא תקין' };
+
   const slot = findDaySlot(weeks, date);
-  if (!slot) return { weeks, ok: false, message: 'התאריך לא נמצא בטווח השבועות של הלוח' };
+  if (!slot) {
+    return { weeks, ok: false, message: `${date} מחוץ לשנת הלוח — כנראה מועד של שנה אחרת.` };
+  }
   const [wi, dk] = slot;
   const cell = weeks[wi].days[dk] ?? [];
   if (cell.some((e) => e.exam_code === exam.code && e.class === cls)) {
@@ -302,4 +311,30 @@ export function importExamToWeeks(weeks, exam, cls, startYear) {
     end_time: normalizeExamTime(exam.end_time),
   };
   return { weeks: withDayEvents(weeks, date, [...cell, event]), ok: true, message: '' };
+}
+
+/** Replace the school's ministry exam list (chunked to stay within batch limits). */
+export async function saveMinistryExams(schoolId, exams, moed) {
+  const col = collection(db, 'schools', schoolId, 'ministry_data');
+  const chunkSize = 400;
+  for (let i = 0; i < exams.length; i += chunkSize) {
+    const batch = writeBatch(db);
+    for (const exam of exams.slice(i, i + chunkSize)) {
+      batch.set(doc(col, String(exam.code)), {
+        name: exam.name ?? '',
+        date: exam.date ?? '',
+        start_time: exam.start_time ?? '',
+        end_time: exam.end_time ?? '',
+      });
+    }
+    await batch.commit();
+  }
+  const meta = writeBatch(db);
+  meta.set(doc(col, '_metadata'), {
+    last_updated: new Date().toISOString().slice(0, 10),
+    moed: moed ?? '',
+    source: 'העלאת קובץ משרד החינוך',
+    count: exams.length,
+  });
+  await meta.commit();
 }

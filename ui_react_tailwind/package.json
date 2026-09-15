@@ -7,10 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node src/lib/vacationRules.test.mjs && node src/lib/bulkBagrut.test.mjs"
+    "test": "node src/lib/vacationRules.test.mjs && node src/lib/bulkBagrut.test.mjs && node src/lib/ministryXlsx.test.mjs"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",
+    "fflate": "^0.8.3",
     "firebase": "^11.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
