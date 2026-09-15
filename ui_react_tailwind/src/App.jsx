@@ -14,6 +14,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [schools, setSchools] = useState([]);
   const [school, setSchool] = useState(null);
+  const [problems, setProblems] = useState([]);
   const [weeks, setWeeks] = useState([]);
   const [rev, setRev] = useState(0);
   const [view, setView] = useState('month');
@@ -29,9 +30,10 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const list = await loadUserSchools(user.email);
+        const { schools: list, problems: found } = await loadUserSchools(user.email);
         if (cancelled) return;
         setSchools(list);
+        setProblems(found);
         setSchool((cur) => cur ?? list[0] ?? null);
       } catch (err) {
         if (!cancelled) setStatus(`שגיאה בטעינת המוסדות: ${err.message}`);
@@ -196,7 +198,15 @@ export default function App() {
           onDelete={deleteEvent}
         />
       ) : (
-        <Panel>לא נמצא מוסד המשויך לחשבון זה.</Panel>
+        <Panel>
+          <p>לא נמצא מוסד המשויך לחשבון זה.</p>
+          <p className="mt-2 text-xs text-slate-500">{user.email}</p>
+          {problems.length > 0 && (
+            <ul className="mt-3 space-y-1 text-right text-xs text-rose-600">
+              {problems.map((p) => <li key={p}>{p}</li>)}
+            </ul>
+          )}
+        </Panel>
       )}
     </Shell>
   );

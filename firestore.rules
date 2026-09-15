@@ -60,7 +60,14 @@ service cloud.firestore {
     }
 
     match /schools/{schoolId} {
-      allow read:   if isMember(schoolId);
+      // `resource.data.owner_email` (rather than a get() lookup) is what makes a
+      // query like where('owner_email','==',me) verifiable per document, so a
+      // director can find their own school without relying on the invitation
+      // index having been written for them.
+      allow read: if signedIn() && (
+        resource.data.owner_email == userEmail()
+        || hasPermissionDoc(schoolId)
+      );
       allow update: if isDirector(schoolId);
       // On ne peut créer qu'une école dont on est soi-même propriétaire.
       allow create: if signedIn() && request.resource.data.owner_email == userEmail();
