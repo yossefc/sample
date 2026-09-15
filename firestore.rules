@@ -3,24 +3,102 @@ rules_version = '2';
 // ============================================================================
 //  Règles de sécurité Firestore — Luach Mivchanim
 // ----------------------------------------------------------------------------
-//  ARCHITECTURE : toutes les lectures/écritures de données passent par le
-//  backend Python (Streamlit + firebase-admin / Admin SDK). L'Admin SDK
-//  s'exécute avec des privilèges de service et CONTOURNE ces règles. Aucun
-//  client (navigateur, app React d'auth) n'accède directement à Firestore :
-//  le composant front ne fait que de l'authentification Firebase Auth.
+//  CONTEXTE : l'app web (Firebase Hosting + React) parle DIRECTEMENT à Firestore
+//  depuis le navigateur. Ces règles sont donc tout le périmètre de sécurité —
+//  il n'y a plus de backend qui filtre.
 //
-//  Posture : on REFUSE donc tout accès client direct. C'est la configuration
-//  la plus sûre et elle n'impacte pas le backend (qui bypasse ces règles).
+//  L'ancienne app Python (Admin SDK) CONTOURNE ces règles : la déployer ne casse
+//  donc rien côté Streamlit. Le changement est purement additif.
 //
-//  ⚠️ Si un jour du code CLIENT lit/écrit Firestore directement, il faudra
-//  ajouter ici des règles explicites basées sur `request.auth` (ex. comparer
-//  request.auth.token.email à owner_email de l'école ou au doc
-//  schools/{id}/permissions/{email}). Ne JAMAIS revenir à un `allow ... if true`
-//  ni à une règle "test mode" expirante.
+//  Principe : personne n'accède à une école sans en être propriétaire ou y avoir
+//  une fiche de permission. Aucun accès anonyme.
 // ============================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function userEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function isOwner(schoolId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/schools/$(schoolId)).data.owner_email == userEmail();
+    }
+
+    function hasPermissionDoc(schoolId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/schools/$(schoolId)/permissions/$(userEmail()));
+    }
+
+    function permissionRole(schoolId) {
+      return get(/databases/$(database)/documents/schools/$(schoolId)/permissions/$(userEmail())).data.role;
+    }
+
+    // Peut ouvrir l'école (directeur ou enseignant invité).
+    function isMember(schoolId) {
+      return isOwner(schoolId) || hasPermissionDoc(schoolId);
+    }
+
+    // Peut administrer l'école (propriétaire, ou invité avec le rôle directeur).
+    function isDirector(schoolId) {
+      return isOwner(schoolId)
+        || (hasPermissionDoc(schoolId) && permissionRole(schoolId) == 'director');
+    }
+
+    // Index des invitations : chacun ne lit que SA propre fiche.
+    // L'écriture reste réservée au backend (Admin SDK), qui contourne ces règles.
+    match /user_schools/{docEmail} {
+      allow read: if signedIn() && docEmail == userEmail();
+      allow write: if false;
+    }
+
+    match /schools/{schoolId} {
+      allow read:   if isMember(schoolId);
+      allow update: if isDirector(schoolId);
+      // On ne peut créer qu'une école dont on est soi-même propriétaire.
+      allow create: if signedIn() && request.resource.data.owner_email == userEmail();
+      allow delete: if false;
+
+      // Le calendrier : les enseignants aussi doivent pouvoir saisir des examens.
+      match /schedule_meta/{docId} {
+        allow read, write: if isMember(schoolId);
+      }
+      match /classes/{classId} {
+        allow read, write: if isMember(schoolId);
+      }
+
+      // Données ministère de l'école : lecture pour tous, écriture aux directeurs.
+      match /ministry_data/{examCode} {
+        allow read:  if isMember(schoolId);
+        allow write: if isDirector(schoolId);
+      }
+
+      // Gestion du personnel : lecture pour les membres, écriture aux directeurs.
+      match /permissions/{permEmail} {
+        allow read:  if isMember(schoolId);
+        allow write: if isDirector(schoolId);
+      }
+    }
+
+    // Données nationales (fêtes, bagrouйот) : lecture pour tout compte connecté,
+    // écriture réservée au backend.
+    match /global_holidays/{year} {
+      allow read:  if signedIn();
+      allow write: if false;
+    }
+    match /global_ministry_data/{examCode} {
+      allow read:  if signedIn();
+      allow write: if false;
+    }
+
+    // Tout le reste est refusé.
     match /{document=**} {
       allow read, write: if false;
     }

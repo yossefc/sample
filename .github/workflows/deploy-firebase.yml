@@ -1,0 +1,59 @@
+name: Deploy web app to Firebase Hosting
+
+# Builds the React app and publishes it to Firebase Hosting on every push to
+# main. Everything runs on GitHub's machines, so nothing has to be installed
+# locally.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT   full JSON of a service account with the
+#                              "Firebase Hosting Admin" role
+#   VITE_FIREBASE_API_KEY      from Firebase console → Project settings → Web app
+#   VITE_FIREBASE_APP_ID       idem
+#   VITE_FIREBASE_MESSAGING_SENDER_ID  idem
+#
+# The VITE_* values are public web config (they ship in the bundle); they live in
+# secrets only to keep the project swappable, not because they are sensitive.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui_react_tailwind/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ui_react_tailwind
+        run: npm ci
+
+      - name: Run rule tests
+        working-directory: ui_react_tailwind
+        run: npm test
+
+      - name: Build
+        working-directory: ui_react_tailwind
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_PROJECT_ID: table-93579
+          VITE_FIREBASE_AUTH_DOMAIN: table-93579.firebaseapp.com
+          VITE_FIREBASE_STORAGE_BUCKET: table-93579.appspot.com
+        run: npm run build
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: table-93579
+          channelId: live
