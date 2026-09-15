@@ -38,11 +38,13 @@ from db_manager import (
     get_schedule,
     hebrew_year_label,
     remove_teacher_permission,
+    save_holidays,
     save_ministry_exams,
     save_schedule,
     search_ministry_exams,
     set_teacher_permission,
 )
+from vacation_rules import HOLIDAY_RULES_VERSION
 
 # ===================================================================
 # CONSTANTS (no hardcoded dates)
@@ -1171,26 +1173,28 @@ def refresh_ministry_db_from_web(season: str = "summer", year: int | None = None
 
 
 def _build_holidays_via_hebcal(start_year: int, year_label: str) -> dict | None:
-    """Fetch holidays + school vacations live from Hebcal.
+    """Regenerate a school year's holiday/vacation document from Hebcal.
 
-    Fallback used when a brand-new year has no pre-generated data in Firestore,
-    so the generated calendar is never empty. Best-effort (returns None on any
-    failure / no network).
+    Used when Firestore holds no document for the year, or one produced by an
+    older rule set. The fresh document is persisted (stamped with the current
+    rules version) so a rule correction sticks, instead of the stale document
+    being re-applied on every regeneration. Best-effort: None on failure.
     """
     try:
-        from auto_vacations import (
-            fetch_hebrew_holidays,
-            calculate_vacation_periods,
-            format_holidays_for_firestore,
-        )
-        merged = {**fetch_hebrew_holidays(start_year), **fetch_hebrew_holidays(start_year + 1)}
-        if not merged:
+        from auto_vacations import build_holiday_document
+
+        doc = build_holiday_document(start_year)
+        if not doc.get("holidays") and not doc.get("school_vacations"):
             return None
-        return {
-            "label": year_label,
-            "holidays": format_holidays_for_firestore(merged),
-            "school_vacations": calculate_vacation_periods(start_year, merged),
-        }
+        if year_label:
+            doc["label"] = year_label
+        try:
+            # Self-heal the stored copy. Holiday dates are national data, shared
+            # by every school — no school-specific data is written here.
+            save_holidays(str(start_year), doc)
+        except Exception:
+            pass  # read-only fallback still yields a correct calendar
+        return doc
     except Exception:
         return None
 
@@ -1245,12 +1249,20 @@ def generate_new_year(start_year: int) -> dict:
         "parashat_hashavua": {},
     }
 
-    # Prefer pre-generated Firestore holiday data; if none exists for this year,
-    # fall back to fetching live from Hebcal so a brand-new year is never empty.
+    # Stored holiday data is only trusted when it was produced by the current
+    # rule set. A document from an older version (e.g. the blanket "חופשת תשרי"
+    # span) is treated as absent and regenerated, so rule fixes self-heal instead
+    # of being masked by stale data that regeneration would faithfully re-apply.
     holiday_sources = []
     for yr_key in [str(start_year), str(start_year + 1)]:
         hd = get_holidays(yr_key)
-        if hd:
+        if not hd:
+            continue
+        try:
+            stored_version = int(hd.get("rules_version", 0) or 0)
+        except (TypeError, ValueError):
+            stored_version = 0
+        if stored_version >= HOLIDAY_RULES_VERSION:
             holiday_sources.append((yr_key, hd))
     if not holiday_sources:
         live = _build_holidays_via_hebcal(start_year, year_label)
@@ -1297,6 +1309,52 @@ def generate_new_year(start_year: int) -> dict:
         new_data["parashat_hashavua"] = {}
 
     return new_data
+
+
+def _is_system_day_event(ev: dict) -> bool:
+    """True for generated day markers (holidays / vacations), as opposed to
+    events people entered themselves (מבחנים, בגרויות, אירועים)."""
+    return ev.get("type") in ("holiday", "vacation") and ev.get("class") == "all"
+
+
+def _collect_user_events(data: dict) -> dict:
+    """Map "YYYY-MM-DD" -> user-entered events.
+
+    Lets a full-year regeneration rebuild the system days (חגים, חופשות) from
+    scratch without discarding what users typed in.
+    """
+    saved = {}
+    for wk in data.get("weeks", []) or []:
+        try:
+            wk_start = datetime.strptime(str(wk.get("start_date", ""))[:10], "%Y-%m-%d")
+        except ValueError:
+            continue
+        days = wk.get("days", {}) or {}
+        for di, dk in enumerate(DAY_KEYS):
+            for ev in (days.get(dk) or []):
+                if _is_system_day_event(ev):
+                    continue
+                key = (wk_start + timedelta(days=di)).strftime("%Y-%m-%d")
+                saved.setdefault(key, []).append(ev)
+    return saved
+
+
+def _restore_user_events(new_data: dict, saved: dict) -> int:
+    """Re-attach preserved user events to freshly generated weeks, matched by date."""
+    restored = 0
+    for date_str, events in (saved or {}).items():
+        try:
+            d = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            continue
+        loc = date_to_week_day(new_data.get("weeks", []), d)
+        if not loc:
+            continue
+        wi, dk = loc
+        cell = new_data["weeks"][wi]["days"].setdefault(dk, [])
+        cell.extend(events)
+        restored += len(events)
+    return restored
 
 
 # ===================================================================
@@ -2539,8 +2597,17 @@ def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
     with col_bg:
         st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
         import_bagrut = st.checkbox("כולל בגרויות", value=True, key="import_bagrut_check")
+    full_reset = st.checkbox(
+        "אתחול מלא של ימי המערכת",
+        value=False,
+        key="full_reset_check",
+        help="מוחק גם מבחנים, בגרויות ואירועים שהוזנו ידנית. ללא סימון — ימי המערכת (חגים, חופשות, פרשות) נבנים מחדש והאירועים שלכם נשמרים.",
+    )
     if st.button("צור שנה חדשה", key="gen_new_year", type="primary", use_container_width=True):
         with st.spinner("יוצר לוח שנה..."):
+            # System days are always rebuilt from scratch; user-entered events are
+            # carried over by date unless a full reset was explicitly requested.
+            preserved = {} if full_reset else _collect_user_events(data)
             new_data = generate_new_year(int(new_year_start))
             new_data["classes"] = data["classes"]
 
@@ -2581,8 +2648,12 @@ def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
                         except Exception:
                             continue
 
+            restored = _restore_user_events(new_data, preserved)
             _guarded_save(school_id, new_data)
-        st.toast("לוח שנה חדש נוצר!")
+        if restored:
+            st.toast(f"לוח שנה חדש נוצר! {restored} אירועים שלכם נשמרו")
+        else:
+            st.toast("לוח שנה חדש נוצר!")
         st.rerun()
 
 
@@ -2756,6 +2827,33 @@ def _edit_cell_dialog():
         f'<div class="edit-modal-date-pill">{DAY_NAMES[di]} · {day_date}</div>',
         unsafe_allow_html=True,
     )
+
+    # Existing events for this day: lets a stray holiday/vacation tag be removed
+    # without regenerating the whole year.
+    cell_events = wk["days"].get(dk, []) or []
+    if cell_events:
+        st.caption("אירועים ביום זה")
+        for idx, ev in enumerate(list(cell_events)):
+            ev_col, del_col = st.columns([4, 1])
+            with ev_col:
+                st.markdown(chip_html(ev), unsafe_allow_html=True)
+            with del_col:
+                if st.button("🗑", key=f"dlg_del_{scope}_{idx}", help="מחק אירוע זה"):
+                    current = wk["days"].get(dk, []) or []
+                    if 0 <= idx < len(current):
+                        current.pop(idx)
+                        wk["days"][dk] = current
+                        _guarded_save(school_id, data, include_school_meta=False)
+                    st.rerun()
+        if any(_is_system_day_event(e) for e in cell_events):
+            if st.button("סמן כיום לימודים", key=f"dlg_clear_sys_{scope}",
+                         use_container_width=True,
+                         help="מסיר את תגי החג/החופשה מיום זה ומשאיר את האירועים שלכם"):
+                wk["days"][dk] = [e for e in cell_events if not _is_system_day_event(e)]
+                _guarded_save(school_id, data, include_school_meta=False)
+                st.toast("סומן כיום לימודים")
+                st.rerun()
+        st.divider()
 
     nt = st.text_input("שם*", key=name_key, placeholder="מבחן")
     type_col, class_col = st.columns([1.2, 1])
