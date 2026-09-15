@@ -10,7 +10,7 @@
  */
 
 import {
-  collection, doc, getDoc, getDocs, runTransaction,
+  collection, doc, getDoc, getDocs, query, runTransaction, where,
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { DAY_KEYS } from './constants.js';
@@ -18,20 +18,42 @@ import { addDays, fmtDate } from './vacationRules.js';
 
 const emptyDays = () => Object.fromEntries(DAY_KEYS.map((k) => [k, []]));
 
-/** Schools the signed-in user can open (owned, plus those they were invited to). */
+/**
+ * Schools the signed-in user can open.
+ *
+ * Looks in both places, because they cover different people: a director is tied
+ * to their school by `owner_email` on the school document, while an invited
+ * teacher is tied by the per-user invitation index. Relying on the index alone
+ * leaves a director with no school when it was never written for them.
+ *
+ * Returns { schools, problems } — problems carries read errors instead of
+ * swallowing them, so "no school" can be told apart from "access denied".
+ */
 export async function loadUserSchools(email) {
   const key = String(email || '').toLowerCase();
-  if (!key) return [];
+  if (!key) return { schools: [], problems: [] };
 
   const found = new Map();
+  const problems = [];
 
-  // Invitations are indexed per user, which is the only lookup a plain teacher
-  // is allowed to make by the security rules.
+  // 1) Schools this user owns.
+  try {
+    const owned = await getDocs(
+      query(collection(db, 'schools'), where('owner_email', '==', key)),
+    );
+    owned.docs.forEach((d) => {
+      found.set(d.id, { id: d.id, role: 'director', allowedClasses: [] });
+    });
+  } catch (err) {
+    problems.push(`בעלות: ${err?.code || err?.message}`);
+  }
+
+  // 2) Schools they were invited to.
   try {
     const snap = await getDoc(doc(db, 'user_schools', key));
     if (snap.exists()) {
-      const schools = snap.data()?.schools ?? {};
-      for (const [id, info] of Object.entries(schools)) {
+      for (const [id, info] of Object.entries(snap.data()?.schools ?? {})) {
+        if (found.has(id)) continue;
         found.set(id, {
           id,
           role: info?.role ?? 'teacher',
@@ -39,16 +61,20 @@ export async function loadUserSchools(email) {
         });
       }
     }
-  } catch {
-    /* no invitations, or not readable — fall through */
+  } catch (err) {
+    problems.push(`הזמנות: ${err?.code || err?.message}`);
   }
 
-  const out = [];
+  const schools = [];
   for (const entry of found.values()) {
-    const school = await loadSchool(entry.id);
-    if (school) out.push({ ...entry, ...school });
+    try {
+      const school = await loadSchool(entry.id);
+      if (school) schools.push({ ...school, role: entry.role, allowedClasses: entry.allowedClasses });
+    } catch (err) {
+      problems.push(`${entry.id}: ${err?.code || err?.message}`);
+    }
   }
-  return out;
+  return { schools, problems };
 }
 
 export async function loadSchool(schoolId) {
