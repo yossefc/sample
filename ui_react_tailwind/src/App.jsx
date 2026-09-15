@@ -138,11 +138,11 @@ export default function App() {
   }, [weeks, dayMap, persist]);
 
   const importExam = useCallback((exam) => {
-    const { weeks: w, ok, message } = importExamToWeeks(weeks, exam, cls, startYear);
+    const { weeks: w, ok, message } = importExamToWeeks(weeks, exam, cls);
     if (!ok) { setStatus(message); return; }
     persist(w);
     setStatus(`יובא: ${exam.name}`);
-  }, [weeks, cls, startYear, persist]);
+  }, [weeks, cls, persist]);
 
   /** Add a whole pasted list of bagrut exams in one save. */
   const addBagrutRows = useCallback((rows) => {
@@ -277,7 +277,7 @@ export default function App() {
 
       {school && showBagrut && (
         <div className="mb-4 print:hidden">
-          <BagrutImport schoolId={school.id} startYear={startYear} cls={cls}
+          <BagrutImport schoolId={school.id} startYear={startYear} cls={cls} isDirector={isDirector}
             onImport={importExam} onBulkAdd={addBagrutRows} onClose={() => setShowBagrut(false)} />
         </div>
       )}
