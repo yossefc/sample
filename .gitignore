@@ -19,3 +19,7 @@ checklist_*.txt
 etapes_*.txt
 prompt_*.txt
 .auth_sessions.json
+
+# Node / web app
+node_modules/
+ui_react_tailwind/dist/
