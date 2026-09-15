@@ -1104,7 +1104,7 @@ def fetch_parasha_from_api(start_year: int, end_year: int) -> dict:
     return parasha_map
 
 
-def refresh_ministry_db_from_web(season: str = "summer", year: int | None = None) -> int:
+def refresh_ministry_db_from_web(season: str = "summer", year: int | None = None, school_id: str = "") -> int:
     """Download Ministry of Education exam schedule Excel and store in Firestore.
 
     If `year` is given, only that year's file is fetched; otherwise a few recent
@@ -1166,7 +1166,7 @@ def refresh_ministry_db_from_web(season: str = "summer", year: int | None = None
             "end_time": et_str,
         })
 
-    save_ministry_exams(exams, moed=moed_label, source="משרד החינוך - אגף בחינות")
+    save_ministry_exams(exams, moed=moed_label, source="משרד החינוך - אגף בחינות", school_id=school_id)
     return len(exams)
 
 
@@ -1348,9 +1348,9 @@ def _schedule_start_year(data: dict) -> int | None:
         return None
 
 
-def _ministry_data_year() -> int | None:
+def _ministry_data_year(school_id: str = "") -> int | None:
     """Calendar year of the exams currently loaded in the ministry DB."""
-    for ex in get_ministry_exams():
+    for ex in get_ministry_exams(school_id):
         if ex.get("code") == "_metadata":
             continue
         try:
@@ -1402,9 +1402,9 @@ def import_exam_to_schedule(data: dict, exam: dict, cls: str) -> tuple[bool, str
     return True, conflict_msg
 
 
-def resync_dates_with_ministry(data: dict, cls: str) -> list[dict]:
+def resync_dates_with_ministry(data: dict, cls: str, school_id: str = "") -> list[dict]:
     """Re-check all bagrut events against Firestore ministry data. Move if dates changed."""
-    all_exams = get_ministry_exams()
+    all_exams = get_ministry_exams(school_id)
     ministry_lookup = {ex["code"]: ex for ex in all_exams if ex.get("code") != "_metadata"}
     changes = []
 
@@ -2329,7 +2329,7 @@ def _render_manual_bagrut(data: dict, cls: str, school_id: str):
 
 def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
     """Ministry of Education import + sync tools."""
-    meta = get_ministry_meta()
+    meta = get_ministry_meta(school_id)
     moed_info = meta.get("moed", "")
     exam_count = meta.get("count", 0)
 
@@ -2340,7 +2340,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
     _ms_start_year = _schedule_start_year(data)
     if _ms_start_year is not None:
         _sched_exam_year = _ms_start_year + 1
-        _db_year = _ministry_data_year()
+        _db_year = _ministry_data_year(school_id)
         if _db_year == _sched_exam_year:
             st.success(f"✅ יש תאריכים רשמיים לשנת הלוח ({_sched_exam_year}).")
         else:
@@ -2373,8 +2373,8 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
                  use_container_width=True, type="primary"):
         try:
             with st.spinner("מוריד מהמשרד..."):
-                count = refresh_ministry_db_from_web(season=season, year=int(dl_year))
-            new_moed = get_ministry_meta().get("moed", f"{season_label} {dl_year}")
+                count = refresh_ministry_db_from_web(season=season, year=int(dl_year), school_id=school_id)
+            new_moed = get_ministry_meta(school_id).get("moed", f"{season_label} {dl_year}")
             st.session_state["ministry_download_result"] = ("ok", f"✅ הורדו {count} בחינות ({new_moed}).")
         except Exception:
             st.session_state["ministry_download_result"] = (
@@ -2385,7 +2385,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
     st.markdown("**2️⃣ עדכון הבגרויות שכבר בלוח**")
     st.caption("מתאים את התאריכים של הבגרויות שכבר נמצאות בלוח לפי המאגר")
     if st.button("🔄 עדכן את הלוח לפי המאגר", key="resync_btn", use_container_width=True):
-        changes = resync_dates_with_ministry(data, cls)
+        changes = resync_dates_with_ministry(data, cls, school_id)
         if not changes:
             st.success("הכל מעודכן — אין שינויים")
         else:
@@ -2411,7 +2411,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
 
     confirmed_query = (st.session_state.get("ministry_confirmed_search") or "").strip()
     if confirmed_query:
-        results = search_ministry_exams(confirmed_query)
+        results = search_ministry_exams(confirmed_query, school_id)
         if results:
             st.caption(f"{len(results)} תוצאות")
             for exam in results:
@@ -2427,7 +2427,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
         else:
             st.caption("לא נמצאו תוצאות")
     else:
-        all_exams = get_ministry_exams()
+        all_exams = get_ministry_exams(school_id)
         all_exams = [e for e in all_exams if e.get("code") != "_metadata"]
         if all_exams:
             exam_options = ["בחר מקצוע..."] + [
@@ -2436,7 +2436,7 @@ def _sidebar_ministry_tools(data: dict, cls: str, school_id: str):
             selected_option = st.selectbox("מקצוע", exam_options, key="ministry_select", label_visibility="collapsed")
             if selected_option != "בחר מקצוע...":
                 sel_code = selected_option.split(" - ")[0].strip()
-                exam = get_ministry_exam(sel_code)
+                exam = get_ministry_exam(sel_code, school_id)
                 if exam:
                     st.markdown(exam_card_html(exam), unsafe_allow_html=True)
                     if st.button("ייבא ללוח", key=f"import_{exam['code']}", type="primary", use_container_width=True):
@@ -2545,7 +2545,7 @@ def _sidebar_year_rollover(data: dict, cls: str, school_id: str):
             new_data["classes"] = data["classes"]
 
             if import_bagrut:
-                all_exams = get_ministry_exams()
+                all_exams = get_ministry_exams(school_id)
                 all_exams = [e for e in all_exams if e.get("code") != "_metadata"]
                 target_exam_year = int(new_year_start) + 1
                 db_base_year = None

@@ -649,38 +649,63 @@ def save_schedule(school_id: str, schedule_data: dict, include_school_meta: bool
 # GLOBAL MINISTRY DATA
 # ===================================================================
 
+def _ministry_ref(db, school_id: str):
+    """Per-school ministry exam collection."""
+    return db.collection("schools").document(str(school_id)).collection("ministry_data")
+
+
+def _read_ministry_docs(col) -> list[dict]:
+    out = []
+    for doc in col.stream():
+        d = doc.to_dict() or {}
+        d["code"] = doc.id
+        out.append(d)
+    return out
+
+
 @st.cache_data(ttl=60, show_spinner=False)
-def get_ministry_exams() -> list[dict]:
-    """Fetch all ministry exam records."""
+def get_ministry_exams(school_id: str = "") -> list[dict]:
+    """Fetch ministry exam records for one school.
+
+    Falls back to the legacy shared collection while a school has no data of its
+    own, so existing installs keep working until they download their own copy.
+    """
     db = _get_db()
-    exams = []
-    docs = db.collection("global_ministry_data").stream()
-    for doc in docs:
-        d = doc.to_dict() or {}
-        d["code"] = doc.id
-        exams.append(d)
-    return exams
+    if school_id:
+        own = _read_ministry_docs(_ministry_ref(db, school_id))
+        if own:
+            return own
+    return _read_ministry_docs(db.collection("global_ministry_data"))
 
 
-def get_ministry_exam(code: str) -> dict | None:
-    """Fetch a single ministry exam by code."""
+def get_ministry_exam(code: str, school_id: str = "") -> dict | None:
+    """Fetch a single ministry exam by code (school-scoped, legacy fallback)."""
     db = _get_db()
-    doc = db.collection("global_ministry_data").document(str(code)).get()
-    if doc.exists:
-        d = doc.to_dict() or {}
-        d["code"] = doc.id
-        return d
+    refs = []
+    if school_id:
+        refs.append(_ministry_ref(db, school_id).document(str(code)))
+    refs.append(db.collection("global_ministry_data").document(str(code)))
+    for ref in refs:
+        doc = ref.get()
+        if doc.exists:
+            d = doc.to_dict() or {}
+            d["code"] = doc.id
+            return d
     return None
 
 
-def save_ministry_exams(exams: list[dict], moed: str = "", source: str = ""):
-    """Bulk upsert ministry exams. Also stores metadata."""
+def save_ministry_exams(exams: list[dict], moed: str = "", source: str = "", school_id: str = ""):
+    """Bulk upsert ministry exams for one school. Also stores metadata.
+
+    Writes are always scoped to the school so one school's download can never
+    change what another school sees.
+    """
     get_ministry_exams.clear()
     get_ministry_meta.clear()
     db = _get_db()
+    col = _ministry_ref(db, school_id) if school_id else db.collection("global_ministry_data")
     batch = db.batch()
-    meta_ref = db.collection("global_ministry_data").document("_metadata")
-    batch.set(meta_ref, {
+    batch.set(col.document("_metadata"), {
         "last_updated": datetime.now().strftime("%Y-%m-%d"),
         "moed": moed,
         "source": source,
@@ -690,8 +715,7 @@ def save_ministry_exams(exams: list[dict], moed: str = "", source: str = ""):
         code = str(exam.get("code", ""))
         if not code or code == "_metadata":
             continue
-        ref = db.collection("global_ministry_data").document(code)
-        batch.set(ref, {
+        batch.set(col.document(code), {
             "name": exam.get("name", ""),
             "date": exam.get("date", ""),
             "start_time": exam.get("start_time", ""),
@@ -701,21 +725,26 @@ def save_ministry_exams(exams: list[dict], moed: str = "", source: str = ""):
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def get_ministry_meta() -> dict:
-    """Get ministry data metadata (last_updated, moed, count)."""
+def get_ministry_meta(school_id: str = "") -> dict:
+    """Get ministry data metadata (last_updated, moed, count) for one school."""
     db = _get_db()
-    doc = db.collection("global_ministry_data").document("_metadata").get()
-    if doc.exists:
-        return doc.to_dict()
+    refs = []
+    if school_id:
+        refs.append(_ministry_ref(db, school_id).document("_metadata"))
+    refs.append(db.collection("global_ministry_data").document("_metadata"))
+    for ref in refs:
+        doc = ref.get()
+        if doc.exists:
+            return doc.to_dict()
     return {}
 
 
-def search_ministry_exams(query: str) -> list[dict]:
+def search_ministry_exams(query: str, school_id: str = "") -> list[dict]:
     """Search ministry exams by code or name substring."""
     query = query.strip()
     if not query:
         return []
-    all_exams = get_ministry_exams()
+    all_exams = get_ministry_exams(school_id)
     results = []
     for exam in all_exams:
         if exam.get("code") == "_metadata":
