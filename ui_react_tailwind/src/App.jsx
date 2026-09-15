@@ -11,6 +11,7 @@ import {
   weeksToDayMap, withDayEvents, findDaySlot, importExamToWeeks,
 } from './lib/schedule.js';
 import { regenerateYear, schoolYearStartOf } from './lib/generate.js';
+import { rowToEvent } from './lib/bulkBagrut.js';
 import { schoolYearLabel } from './lib/hebrewYear.js';
 import { MONTH_NAMES_HEB } from './lib/constants.js';
 
@@ -143,6 +144,26 @@ export default function App() {
     setStatus(`יובא: ${exam.name}`);
   }, [weeks, cls, startYear, persist]);
 
+  /** Add a whole pasted list of bagrut exams in one save. */
+  const addBagrutRows = useCallback((rows) => {
+    let next = weeks;
+    let added = 0;
+    const skipped = [];
+    for (const row of rows) {
+      const slot = findDaySlot(next, row.date);
+      if (!slot) { skipped.push(`${row.name} (${row.date})`); continue; }
+      const [wi, dk] = slot;
+      const cell = next[wi].days?.[dk] ?? [];
+      next = withDayEvents(next, row.date, [...cell, rowToEvent(row, cls)]);
+      added += 1;
+    }
+    if (added) persist(next);
+    setStatus([
+      added ? `נוספו ${added} בחינות` : 'לא נוספה אף בחינה',
+      skipped.length ? `מחוץ לטווח הלוח: ${skipped.join(', ')}` : '',
+    ].filter(Boolean).join(' · '));
+  }, [weeks, cls, persist]);
+
   const regenerate = useCallback(async (keepUserEvents) => {
     if (!isDirector) return;
     const warning = keepUserEvents
@@ -256,7 +277,8 @@ export default function App() {
 
       {school && showBagrut && (
         <div className="mb-4 print:hidden">
-          <BagrutImport schoolId={school.id} startYear={startYear} cls={cls} onImport={importExam} onClose={() => setShowBagrut(false)} />
+          <BagrutImport schoolId={school.id} startYear={startYear} cls={cls}
+            onImport={importExam} onBulkAdd={addBagrutRows} onClose={() => setShowBagrut(false)} />
         </div>
       )}
 
