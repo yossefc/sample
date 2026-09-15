@@ -4,15 +4,12 @@ name: Deploy web app to Firebase Hosting
 # main. Everything runs on GitHub's machines, so nothing has to be installed
 # locally.
 #
-# Required repository secrets (Settings → Secrets and variables → Actions):
-#   FIREBASE_SERVICE_ACCOUNT   full JSON of a service account with the
+# Required repository secret (Settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT   full JSON of a service account holding the
 #                              "Firebase Hosting Admin" role
-#   VITE_FIREBASE_API_KEY      from Firebase console → Project settings → Web app
-#   VITE_FIREBASE_APP_ID       idem
-#   VITE_FIREBASE_MESSAGING_SENDER_ID  idem
 #
-# The VITE_* values are public web config (they ship in the bundle); they live in
-# secrets only to keep the project swappable, not because they are sensitive.
+# The Firebase web config (apiKey / authDomain / projectId) is public by design
+# and lives in src/lib/firebase.js — it is not a credential and needs no secret.
 
 on:
   push:
@@ -41,13 +38,6 @@ jobs:
 
       - name: Build
         working-directory: ui_react_tailwind
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_PROJECT_ID: table-93579
-          VITE_FIREBASE_AUTH_DOMAIN: table-93579.firebaseapp.com
-          VITE_FIREBASE_STORAGE_BUCKET: table-93579.appspot.com
         run: npm run build
 
       - name: Deploy to Firebase Hosting
