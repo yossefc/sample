@@ -25,3 +25,43 @@ body {
 .error {
   @apply mt-1 text-xs text-rose-600;
 }
+
+/* ---------------------------------------------------------------------------
+   A4 printing — the schedule is meant to go on a noticeboard, so the printed
+   sheet must look like the real לוח מבחנים, not like a screenshot of a web page.
+   --------------------------------------------------------------------------- */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  html, body {
+    background: #fff !important;
+    /* Keep the event colours: without this most browsers drop backgrounds. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-hide { display: none !important; }
+
+  .print-sheet {
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* Repeat the day names at the top of every printed page. */
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+
+  /* Never split a week across two pages. */
+  tr, .print-keep { break-inside: avoid; page-break-inside: avoid; }
+
+  table { width: 100% !important; font-size: 8.5pt; }
+  td { height: auto !important; }
+
+  /* Months in the quarter view print one per page. */
+  .print-page-break { break-before: page; page-break-before: always; }
+}
+

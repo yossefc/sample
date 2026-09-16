@@ -5,6 +5,7 @@ import Calendar from './components/Calendar.jsx';
 import WeekTable from './components/WeekTable.jsx';
 import BagrutImport from './components/BagrutImport.jsx';
 import Legend from './components/Legend.jsx';
+import StaffManager from './components/StaffManager.jsx';
 import { auth, googleProvider } from './lib/firebase.js';
 import {
   loadUserSchools, loadWeeks, saveWeeks, saveSchoolMeta,
@@ -12,6 +13,7 @@ import {
 } from './lib/schedule.js';
 import { regenerateYear, schoolYearStartOf } from './lib/generate.js';
 import { rowToEvent } from './lib/bulkBagrut.js';
+import { shareScheduleImage } from './lib/exportImage.js';
 import { schoolYearLabel } from './lib/hebrewYear.js';
 import { MONTH_NAMES_HEB } from './lib/constants.js';
 
@@ -55,6 +57,7 @@ export default function App() {
   const [anchor, setAnchor] = useState(() => utcMonthStart(new Date()));
   const [cls, setCls] = useState('');
   const [showBagrut, setShowBagrut] = useState(false);
+  const [showStaff, setShowStaff] = useState(false);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -164,6 +167,25 @@ export default function App() {
     ].filter(Boolean).join(' · '));
   }, [weeks, cls, persist]);
 
+  /** Render the visible range to a PNG and share it (WhatsApp) or download it. */
+  const exportImage = useCallback(async () => {
+    setBusy(true);
+    try {
+      const how = await shareScheduleImage({
+        weeks: tableWeeks,
+        parashot,
+        cls,
+        schoolName: school?.name ?? '',
+        yearLabel: schoolYearLabel(startYear),
+      }, `luach-${cls || 'kol'}.png`);
+      setStatus(how === 'shared' ? 'התמונה שותפה ✓' : 'התמונה הורדה ✓');
+    } catch (err) {
+      setStatus(`יצירת התמונה נכשלה: ${err.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [tableWeeks, parashot, cls, school, startYear]);
+
   const regenerate = useCallback(async (keepUserEvents) => {
     if (!isDirector) return;
     const warning = keepUserEvents
@@ -257,6 +279,8 @@ export default function App() {
 
             <div className="ms-auto inline-flex flex-wrap gap-1">
               {canEdit && <Btn active={showBagrut} onClick={() => setShowBagrut((v) => !v)}>🎓 בגרויות</Btn>}
+              {isDirector && <Btn active={showStaff} onClick={() => setShowStaff((v) => !v)}>👥 ניהול צוות</Btn>}
+              <Btn onClick={exportImage} title="תמונה חדה לשליחה בוואטסאפ">📷 תמונה</Btn>
               {isDirector && (
                 <Btn onClick={() => regenerate(true)} title="בונה מחדש חגים, חופשות ופרשות מהמקור, ושומר את האירועים שלכם">
                   🔄 בנה מחדש ימי מערכת
@@ -279,6 +303,13 @@ export default function App() {
         <div className="mb-4 print:hidden">
           <BagrutImport schoolId={school.id} startYear={startYear} cls={cls} isDirector={isDirector}
             onImport={importExam} onBulkAdd={addBagrutRows} onClose={() => setShowBagrut(false)} />
+        </div>
+      )}
+
+      {school && showStaff && isDirector && (
+        <div className="mb-4 print:hidden">
+          <StaffManager schoolId={school.id} classes={school.classes ?? []}
+            myEmail={(user.email || '').toLowerCase()} onClose={() => setShowStaff(false)} />
         </div>
       )}
 

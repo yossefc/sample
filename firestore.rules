@@ -94,6 +94,16 @@ service cloud.firestore {
       }
     }
 
+    // Lecture inter-écoles : chacun peut retrouver SES propres fiches de
+    // permission (et seulement les siennes), ce qui permet à un enseignant de
+    // savoir à quelles écoles il a été invité sans que le directeur doive écrire
+    // dans un document appartenant à quelqu'un d'autre.
+    // Le test porte sur le champ `email` (et non sur l'identifiant du document)
+    // car c'est lui qui rend la requête de groupe vérifiable par Firestore.
+    match /{path=**}/permissions/{permEmail} {
+      allow read: if signedIn() && resource.data.email == userEmail();
+    }
+
     // Données nationales (fêtes, bagrouйот) : lecture pour tout compte connecté,
     // écriture réservée au backend.
     match /global_holidays/{year} {

@@ -27,6 +27,6 @@ npm run build
 cd ..
 
 echo "==> Deploying to Firebase ($PROJECT)"
-npx firebase-tools deploy --only hosting,firestore:rules --project "$PROJECT"
+npx firebase-tools deploy --only hosting,firestore --project "$PROJECT"
 
 echo "==> Done: https://${PROJECT}.web.app"
