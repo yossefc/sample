@@ -10,7 +10,8 @@
  */
 
 import {
-  collection, doc, getDoc, getDocs, query, runTransaction, setDoc, where, writeBatch,
+  collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, query,
+  runTransaction, setDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { DAY_KEYS } from './constants.js';
@@ -48,7 +49,28 @@ export async function loadUserSchools(email) {
     problems.push(`בעלות: ${err?.code || err?.message}`);
   }
 
-  // 2) Schools they were invited to.
+  // 2) Schools that invited them. A collection-group query over permission
+  //    documents means a director only ever writes inside their own school —
+  //    no writing into a document owned by the invited teacher.
+  try {
+    const invited = await getDocs(
+      query(collectionGroup(db, 'permissions'), where('email', '==', key)),
+    );
+    invited.docs.forEach((d) => {
+      const id = d.ref.parent.parent?.id;
+      if (!id || found.has(id)) return;
+      const info = d.data() ?? {};
+      found.set(id, {
+        id,
+        role: info.role ?? 'teacher',
+        allowedClasses: Array.isArray(info.allowed_classes) ? info.allowed_classes : [],
+      });
+    });
+  } catch (err) {
+    problems.push(`הרשאות: ${err?.code || err?.message}`);
+  }
+
+  // 3) Legacy per-user index, kept so anything created by the older app is found.
   try {
     const snap = await getDoc(doc(db, 'user_schools', key));
     if (snap.exists()) {
@@ -61,8 +83,8 @@ export async function loadUserSchools(email) {
         });
       }
     }
-  } catch (err) {
-    problems.push(`הזמנות: ${err?.code || err?.message}`);
+  } catch {
+    /* the index is optional — the two lookups above are the real ones */
   }
 
   const schools = [];
@@ -104,6 +126,26 @@ export async function loadPermissions(schoolId) {
   const snap = await getDocs(collection(db, 'schools', schoolId, 'permissions'));
   return snap.docs.map((p) => ({ email: p.id, ...(p.data() ?? {}) }));
 }
+
+/** Invite someone, or change what they may see. Directors only (enforced by rules). */
+export async function setPermission(schoolId, email, { role = 'teacher', allowedClasses = [] } = {}) {
+  const key = String(email || '').trim().toLowerCase();
+  if (!key) throw new Error('חסר אימייל');
+  await setDoc(doc(db, 'schools', schoolId, 'permissions', key), {
+    email: key,
+    role,
+    allowed_classes: allowedClasses,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+/** Revoke access. */
+export async function removePermission(schoolId, email) {
+  await deleteDoc(doc(db, 'schools', schoolId, 'permissions', String(email).toLowerCase()));
+}
+
+/** Basic sanity check before writing an invitation. */
+export const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value ?? '').trim());
 
 /** The stored weeks array plus its revision (used for optimistic concurrency). */
 export async function loadWeeks(schoolId) {
